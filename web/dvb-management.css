@@ -1,0 +1,906 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright (C) Delitants */
+
+.dvb-page {
+  min-width: 0;
+}
+
+.dvb-descrambling-status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 0.65rem;
+  margin: 1rem 0;
+}
+.dvb-descrambling-status div {
+  border-left: 2px solid var(--brand);
+  padding: 0.15rem 0.6rem;
+}
+.dvb-descrambling-status dt { color: var(--muted); font-size: 0.8rem; }
+.dvb-descrambling-status dd { margin: 0.25rem 0 0; overflow-wrap: anywhere; }
+.dvb-descrambling-access { display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap; }
+.dvb-descrambling-access label { flex: 1 1 210px; min-width: 0; }
+.dvb-descrambling-candidates { list-style: none; padding: 0; }
+.dvb-descrambling-candidates li { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
+.dvb-descrambling-candidates span { overflow-wrap: anywhere; min-width: 0; }
+
+.dvb-page .section-head {
+  flex-wrap: wrap;
+}
+
+.dvb-page .section-head h2 {
+  margin-bottom: 0;
+}
+
+.dvb-intro {
+  margin: 0.45rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dvb-cards-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.85rem 0;
+}
+
+.dvb-cards-summary .card {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.3rem 0.45rem;
+  border: 0;
+  border-radius: 3px;
+  background: rgba(0, 95, 115, 0.04);
+}
+
+.dvb-cards-summary h3 {
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.dvb-cards-summary p {
+  margin: 0;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dvb-cards-summary .card:last-child {
+  background: rgba(170, 30, 46, 0.04);
+}
+
+.dvb-toolbar.dvb-cards-toolbar {
+  grid-template-columns: minmax(180px, 1.25fr) minmax(150px, 0.8fr) minmax(180px, 1fr);
+  margin-top: 1rem;
+}
+
+.dvb-card-filters[open] {
+  grid-column: 1 / -1;
+}
+
+.dvb-card-filters .dvb-toolbar {
+  margin: 0.5rem 0 0;
+}
+
+.dvb-card-filters summary,
+.dvb-card-raw summary {
+  cursor: pointer;
+  color: var(--brand);
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.6rem 0;
+}
+
+[data-panel="dvb-cards"] .dvb-pagination label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+[data-panel="dvb-cards"] .dvb-pagination select {
+  width: auto;
+}
+
+[data-panel="dvb-cards"] .dvb-pagination .actions {
+  margin-left: auto;
+}
+
+.dvb-pending {
+  margin: 1rem 0;
+  border-left: 3px solid var(--brand);
+}
+
+.dvb-toolbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+  align-items: end;
+}
+
+.dvb-page label {
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.dvb-page input,
+.dvb-page select {
+  min-width: 0;
+  width: 100%;
+  font-size: 0.8rem;
+}
+
+.dvb-page :disabled {
+  color: var(--muted);
+  background: #edf0eb;
+  border-color: var(--line);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.dvb-page button:disabled:hover {
+  filter: none;
+}
+
+.dvb-page :focus-visible,
+.dvb-dialog :focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+
+.dvb-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-height: 180px;
+  max-height: min(55vh, 600px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.dvb-table-scroll table {
+  min-width: 900px;
+}
+
+[data-panel="dvb-cards"] .dvb-table-scroll table {
+  min-width: 880px;
+  table-layout: fixed;
+}
+
+.dvb-table-scroll th {
+  position: sticky;
+  top: 0;
+  background: #edf0eb;
+  font-size: 0.68rem;
+  letter-spacing: 0.025em;
+}
+
+.dvb-table-scroll td {
+  font-size: 0.8rem;
+}
+
+.dvb-stream-layout {
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.dvb-group-rail {
+  position: sticky;
+  top: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.7rem;
+  background: rgba(0, 95, 115, 0.03);
+}
+
+.dvb-group-rail h3 {
+  margin: 0.1rem 0 0.8rem;
+  font-size: 0.85rem;
+}
+
+.dvb-group-entries {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.dvb-group-entries button {
+  text-align: left;
+  font-size: 0.8rem;
+}
+
+.dvb-mobile-group {
+  display: none;
+}
+
+.dvb-stream-content {
+  min-width: 0;
+}
+
+.dvb-stream-toolbar {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 1;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.dvb-stream-toolbar .dvb-toolbar {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 0.75rem;
+}
+
+.dvb-primary-actions {
+  gap: 0.5rem;
+}
+
+.dvb-stream-toolbar .hint {
+  margin: 0.65rem 0 0;
+}
+
+.dvb-page .dvb-selection-label {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  font-size: inherit;
+}
+
+.dvb-selection-label input {
+  width: 0.9rem;
+  height: 0.9rem;
+  margin: 0;
+}
+
+.dvb-pagination,
+.dvb-bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.dvb-bulk-bar {
+  position: sticky;
+  bottom: 0.5rem;
+  z-index: 3;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 -3px 12px rgba(0, 95, 115, 0.08);
+}
+
+.dvb-bulk-bar label { display: grid; gap: 0.25rem; min-width: 0; flex: 1 1 8rem; }
+.dvb-bulk-bar select { width: 100%; min-width: 0; max-width: 100%; }
+.dvb-bulk-bar [hidden], .dvb-bulk-results[hidden] { display: none; }
+.dvb-bulk-bar .hint { overflow-wrap: anywhere; }
+.dvb-bulk-bar .actions { flex-wrap: wrap; }
+.dvb-stream-select { display: inline-flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+.dvb-stream-select input { width: 1.1rem; height: 1.1rem; margin: 0; }
+.dvb-bulk-results { margin-top: 0.75rem; overflow-wrap: anywhere; }
+.dvb-bulk-results ul { max-height: 22rem; overflow: auto; padding-left: 1.5rem; }
+.dvb-bulk-results li { margin: 0.5rem 0; white-space: pre-wrap; }
+@media (max-width: 700px) {
+  .dvb-bulk-bar { bottom: 0; padding: 0.5rem; gap: 0.4rem; }
+  .dvb-bulk-bar .dvb-selection-count { flex: 1 1 100%; }
+  .dvb-bulk-bar button, .dvb-bulk-bar select, .dvb-stream-select { min-height: 44px; }
+  .dvb-bulk-bar .hint { font-size: 0.7rem; }
+}
+
+.dvb-selection-count {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dvb-bulk-bar .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.dvb-dialog h3 {
+  margin: 0;
+}
+
+.dvb-card-dialog {
+  background: var(--bg);
+  color: var(--ink);
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.dvb-card-dialog > form,
+.dvb-card-dialog > .dvb-operation-content {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 2rem - 2px);
+  padding: 0;
+  margin: 0;
+  gap: 0;
+}
+
+.dvb-dialog-header,
+.dvb-card-dialog .dialog-actions {
+  flex: none;
+  padding: 1rem;
+  background: var(--bg-card);
+}
+
+.dvb-dialog-header {
+  display: grid;
+  grid-auto-rows: max-content;
+  gap: 0.35rem;
+  border-bottom: 1px solid var(--line);
+  /* Long literal identities scroll here instead of displacing the body/actions. */
+  max-height: min(30dvh, 12rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dvb-card-dialog .dialog-actions {
+  border-top: 1px solid var(--line);
+}
+
+.dvb-dialog-body {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem;
+}
+
+.dvb-card-dialog .dvb-dialog-body > .notice,
+.dvb-card-dialog .dvb-dialog-body > fieldset {
+  margin-bottom: 0.85rem;
+}
+
+.dvb-card-dialog .dvb-dialog-body > :last-child {
+  margin-bottom: 0;
+}
+
+.dvb-card-dialog fieldset {
+  min-width: 0;
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.85rem;
+}
+
+.dvb-card-dialog legend {
+  color: var(--brand);
+  font-weight: 600;
+  padding: 0 0.4rem;
+}
+
+.dvb-settings-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.dvb-card-dialog [hidden] {
+  display: none;
+}
+
+.dvb-card-dialog label,
+.dvb-card-dialog input,
+.dvb-card-dialog select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dvb-card-dialog input:not([type="checkbox"]),
+.dvb-card-dialog select {
+  width: 100%;
+}
+
+.dvb-card-dialog .hint,
+.dvb-card-dialog .notice,
+.dvb-card-dialog h3,
+.dvb-card-dialog li {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.dvb-card-dialog :disabled {
+  cursor: not-allowed;
+}
+
+.dvb-retained-values {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.dvb-retained-values dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dvb-card-dialog .dialog-actions {
+  flex-wrap: wrap;
+}
+
+[data-panel="dvb-cards"] .dvb-table-scroll td {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+  padding: 0.65rem 0.5rem;
+  vertical-align: top;
+}
+
+[data-panel="dvb-cards"] .dvb-table-scroll th {
+  z-index: 1;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+[data-panel="dvb-cards"] th:nth-child(1) { width: 12%; }
+[data-panel="dvb-cards"] th:nth-child(2) { width: 16%; }
+[data-panel="dvb-cards"] th:nth-child(3) { width: 15%; }
+[data-panel="dvb-cards"] th:nth-child(4) { width: 23%; }
+[data-panel="dvb-cards"] th:nth-child(5) { width: 19%; }
+[data-panel="dvb-cards"] th:nth-child(6) { width: 15%; }
+
+.dvb-card-primary,
+.dvb-card-secondary {
+  display: block;
+}
+
+.dvb-card-secondary {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.dvb-card-secondary:empty {
+  display: none;
+}
+
+[data-label="Card"] .dvb-card-primary {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-status] .dvb-card-primary {
+  display: inline-block;
+  font-weight: 600;
+  font-size: 0.72rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 1rem;
+  background: rgba(0, 95, 115, 0.08);
+}
+
+[data-status="active"] .dvb-card-primary,
+[data-status="available"] .dvb-card-primary {
+  color: var(--brand);
+}
+
+[data-status="error"] .dvb-card-primary,
+[data-status="offline"] .dvb-card-primary {
+  color: var(--danger);
+  background: rgba(170, 30, 46, 0.08);
+}
+
+.dvb-card-actions {
+  text-align: right;
+}
+
+.dvb-card-actions button {
+  display: inline-block;
+  padding: 0.4rem 0.5rem;
+  min-height: 30px;
+  font-size: 0.75rem;
+  margin: 0 0 0.25rem 0.2rem;
+}
+
+.dvb-card-actions [data-card-details],
+#cardSettingsClose,
+#cardOperationClose,
+#cardOperationRetry {
+  background: transparent;
+  color: var(--brand);
+  border: 1px solid var(--line);
+}
+
+.dvb-card-details[hidden],
+.dvb-card-restart [hidden] {
+  display: none;
+}
+
+.dvb-card-restart {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--danger);
+  border-radius: 8px;
+  margin-top: 0.6rem;
+  padding: 0.75rem;
+  background: rgba(170, 30, 46, 0.04);
+}
+
+.dvb-card-restart h4,
+.dvb-card-restart .hint {
+  display: block;
+  margin: 0 0 0.5rem;
+  white-space: normal;
+}
+
+.dvb-card-restart button {
+  margin: 0 0.35rem 0.25rem 0;
+  max-width: 100%;
+}
+
+.dvb-card-restart [data-card-action="restart"]:not(:disabled) {
+  background: var(--danger);
+}
+
+.dvb-card-details dl {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 3fr);
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0;
+}
+
+.dvb-card-details dt {
+  font-weight: 600;
+}
+
+.dvb-card-details dd {
+  margin: 0;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dvb-card-details > td > .hint {
+  margin-top: 0;
+  white-space: normal;
+}
+
+[data-panel="dvb-cards"] .notice {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .dvb-stream-toolbar .dvb-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .dvb-settings-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dvb-card-dialog {
+    width: calc(100vw - 1.5rem);
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .dvb-dialog-header,
+  .dvb-dialog-body,
+  .dvb-card-dialog .dialog-actions {
+    padding: 0.75rem;
+  }
+
+  .dvb-card-dialog button {
+    min-height: 44px;
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .dvb-card-details dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.3rem;
+  }
+
+  .dvb-card-details dd {
+    margin-bottom: 0.5rem;
+  }
+
+  .dvb-cards-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+  }
+
+  .dvb-cards-summary .card {
+    padding: 0.25rem;
+    flex-wrap: wrap;
+    gap: 0.15rem;
+  }
+
+  .dvb-cards-summary h3,
+  .dvb-cards-summary p {
+    font-size: 0.7rem;
+  }
+
+  .dvb-cards-summary .card:nth-child(4) {
+    grid-column: span 2;
+  }
+
+  .dvb-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dvb-toolbar.dvb-cards-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dvb-cards-toolbar > label:first-child,
+  .dvb-card-filters .dvb-toolbar > label:last-child {
+    grid-column: 1 / -1;
+  }
+
+  [data-panel="dvb-cards"] button,
+  [data-panel="dvb-cards"] select,
+  [data-panel="dvb-cards"] input,
+  [data-panel="dvb-cards"] summary {
+    min-height: 44px;
+  }
+
+  [data-panel="dvb-cards"] .dvb-table-scroll {
+    border: 0;
+    background: transparent;
+    max-height: none;
+    overflow: visible;
+  }
+
+  [data-panel="dvb-cards"] .dvb-table-scroll table {
+    min-width: 0;
+    display: block;
+  }
+
+  [data-panel="dvb-cards"] thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  #dvbCardsTableBody {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  [data-panel="dvb-cards"] tr[data-card-id] {
+    display: grid;
+    grid-template-areas: "card status" "hardware transport" "signal actions";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg-card);
+    padding: 0.4rem;
+  }
+
+  [data-panel="dvb-cards"] .dvb-table-scroll td {
+    display: block;
+    min-width: 0;
+    padding: 0.4rem;
+    border: 0;
+  }
+
+  [data-panel="dvb-cards"] tr[data-card-id] td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.25rem;
+    text-align: left;
+    color: var(--muted);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  [data-panel="dvb-cards"] tr[data-card-id] td:nth-child(1) { grid-area: card; }
+  [data-panel="dvb-cards"] tr[data-card-id] td:nth-child(2) { grid-area: hardware; }
+  [data-panel="dvb-cards"] tr[data-card-id] td:nth-child(3) { grid-area: status; }
+  [data-panel="dvb-cards"] tr[data-card-id] td:nth-child(4) { grid-area: transport; }
+  [data-panel="dvb-cards"] tr[data-card-id] td:nth-child(5) { grid-area: signal; }
+  [data-panel="dvb-cards"] tr[data-card-id] td:nth-child(6) { grid-area: actions; }
+
+  .dvb-card-actions button {
+    display: block;
+    width: 100%;
+    margin: 0 0 0.3rem;
+  }
+
+  .dvb-card-details:not([hidden]) {
+    display: block;
+    min-width: 0;
+    padding: 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg-card);
+  }
+
+  .dvb-stream-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dvb-group-rail {
+    display: none;
+  }
+
+  .dvb-mobile-group {
+    display: grid;
+    margin-bottom: 0.75rem;
+  }
+
+  .dvb-stream-toolbar {
+    top: 0;
+  }
+}
+
+/* Task5: scoped native groups and bounded snapshot records. */
+[data-panel="dvb-streams"] .dvb-group-entries {
+  max-height: 60dvh;
+  overflow: auto;
+}
+[data-panel="dvb-streams"] .dvb-group-entries button {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+[data-panel="dvb-streams"] .dvb-group-entries [aria-pressed="true"] {
+  background: var(--brand);
+  color: #fff;
+}
+[data-panel="dvb-streams"] .dvb-group-actions { flex-wrap: wrap; gap: 0.4rem; }
+[data-panel="dvb-streams"] .hint,
+[data-panel="dvb-streams"] .notice { overflow-wrap: anywhere; }
+[data-panel="dvb-streams"] .dvb-stream-filters {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+  margin-top: 0.75rem;
+}
+[data-panel="dvb-streams"] .dvb-stream-advanced[open] { grid-column: 1 / -1; }
+[data-panel="dvb-streams"] summary { cursor: pointer; color: var(--brand); padding: 0.5rem 0; }
+[data-panel="dvb-streams"] .dvb-table-scroll { max-height: 65dvh; overflow: auto; }
+[data-panel="dvb-streams"] .dvb-table-scroll table { min-width: 660px; table-layout: fixed; }
+[data-panel="dvb-streams"] .dvb-table-scroll td {
+  min-width: 0;
+  vertical-align: top;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  padding: 0.65rem 0.5rem;
+  line-height: 1.4;
+}
+[data-panel="dvb-streams"] .dvb-table-scroll th { white-space: normal; }
+.dvb-stream-group { display: block; color: var(--muted); margin: 0.3rem 0; }
+[data-panel="dvb-streams"] .url-value { display: block; max-height: 10rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dvb-stream-details pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 20rem; overflow: auto; margin: 0; }
+[data-panel="dvb-streams"] [hidden] { display: none; }
+[data-panel="dvb-streams"] .dvb-pagination label { display: flex; align-items: center; gap: 0.5rem; }
+[data-panel="dvb-streams"] .dvb-pagination select { width: auto; }
+.dvb-group-dialog {
+  width: min(560px, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  padding: 0;
+  background: var(--bg);
+}
+.dvb-group-dialog form { display: flex; flex-direction: column; max-height: calc(100dvh - 2rem - 2px); min-width: 0; }
+.dvb-group-dialog .dvb-dialog-head,
+.dvb-group-dialog .dialog-actions { padding: 1rem; margin: 0; flex: 0 0 auto; }
+.dvb-group-dialog .dvb-dialog-head { max-height: 25dvh; overflow: auto; border-bottom: 1px solid var(--line); }
+.dvb-group-dialog .dvb-dialog-body { overflow: auto; min-height: 0; padding: 1rem; }
+.dvb-group-dialog .dialog-actions { border-top: 1px solid var(--line); flex-wrap: wrap; }
+.dvb-group-dialog h3,
+.dvb-group-dialog .hint,
+.dvb-group-dialog .notice { overflow-wrap: anywhere; white-space: pre-wrap; }
+.dvb-group-dialog input { width: 100%; min-width: 0; }
+.dvb-group-dialog [hidden] { display: none; }
+@media (max-width: 920px) {
+  [data-panel="dvb-streams"] .dvb-stream-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-panel="dvb-streams"] .dvb-stream-filters > label:first-child { grid-column: 1 / -1; }
+  [data-panel="dvb-streams"] .dvb-stream-advanced .dvb-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-panel="dvb-streams"] button,
+  [data-panel="dvb-streams"] input,
+  [data-panel="dvb-streams"] select,
+  [data-panel="dvb-streams"] summary { min-height: 44px; }
+  [data-panel="dvb-streams"] .dvb-table-scroll { max-height: 65dvh; }
+  [data-panel="dvb-streams"] .dvb-table-scroll table { min-width: 0; display: block; }
+  [data-panel="dvb-streams"] thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  #dvbStreamTableBody { display: grid; gap: 0.75rem; }
+  [data-panel="dvb-streams"] tr[data-stream-id] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+  [data-panel="dvb-streams"] tr[data-stream-id] td { display: block; border: 0; }
+  [data-panel="dvb-streams"] tr[data-stream-id] td:first-child { grid-column: 1 / -1; }
+  [data-panel="dvb-streams"] tr[data-stream-id] td::before { content: attr(data-label); display: block; font-size: 0.65rem; font-weight: 600; color: var(--muted); margin-bottom: 0.3rem; }
+  .dvb-stream-details:not([hidden]), .dvb-stream-details td { display: block; min-width: 0; }
+}
+[data-panel="dvb-streams"] .dvb-group-entries button {
+  display: flex;
+  gap: 0.2rem;
+  align-items: start;
+  background: #edf0eb;
+  color: var(--ink);
+}
+[data-panel="dvb-streams"] .dvb-group-entries [aria-pressed="true"] { background: var(--brand); color: #fff; }
+.dvb-group-entry-count { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.dvb-group-entry-name,
+[data-panel="dvb-streams"] tr[data-stream-id] strong,
+.dvb-stream-group {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+@media (max-width: 920px) {
+  [data-panel="dvb-streams"] .dvb-stream-toolbar { position: static; max-height: none; overflow: visible; }
+}
+
+/* Structured stream editor: identity and actions remain outside the scrolling form body. */
+.dvb-scan-editor .dvb-scan-services { list-style: none; padding: 0; display: grid; gap: 0.6rem; }
+.dvb-scan-editor .dvb-scan-services li { border: 1px solid var(--line); border-radius: 5px; padding: 0.65rem; background: rgba(0, 95, 115, 0.035); }
+.dvb-scan-editor .dvb-scan-services label { flex-direction: row; align-items: baseline; font-weight: 600; }
+.dvb-scan-editor li { overflow-wrap: anywhere; }
+.dvb-scan-editor .dvb-scan-services p { margin: 0.3rem 0 0; font-size: 0.82rem; }
+.dvb-scan-editor #dvb-scan-preview { max-height: 18rem; overflow-y: auto; padding-left: 1.6rem; }
+.dvb-scan-editor #dvb-scan-preview li { margin: 0.5rem 0; }
+.dvb-scan-editor #dvb-scan-preview output { padding: 0.3rem; }
+.dvb-scan-editor #dvb-scan-signal { margin-bottom: 1rem; }
+.dvb-scan-editor .dialog-actions button { flex: 0 1 auto; }
+.dvb-stream-editor {
+  width: min(900px, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+.dvb-stream-editor form { display: flex; flex-direction: column; max-height: calc(100dvh - 2rem - 2px); min-width: 0; }
+.dvb-stream-editor .dvb-editor-header { padding: 1rem 1.2rem; border-bottom: 1px solid var(--line); flex: 0 0 auto; max-height: 24dvh; overflow: auto; }
+.dvb-stream-editor h3 { margin: 0; }
+.dvb-stream-editor .dvb-editor-header p { margin-bottom: 0; }
+.dvb-stream-editor .dvb-dialog-body { padding: 1rem 1.2rem; overflow: auto; min-height: 0; }
+.dvb-stream-editor fieldset { min-width: 0; margin: 0 0 1.2rem; padding: 1rem; border: 1px solid var(--line); border-radius: 5px; background: rgba(255, 255, 255, 0.28); }
+.dvb-stream-editor legend { font-weight: 600; color: var(--brand); padding: 0 0.4rem; }
+.dvb-stream-editor .dvb-editor-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem 1rem; }
+.dvb-stream-editor label { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; margin-bottom: 0.65rem; }
+.dvb-stream-editor input,
+.dvb-stream-editor select { min-width: 0; width: 100%; max-width: 100%; }
+.dvb-stream-editor .checkbox-row { flex-direction: row; align-items: center; }
+.dvb-stream-editor [type="checkbox"] { width: auto; flex: 0 0 auto; }
+.dvb-stream-editor .hint,
+.dvb-stream-editor .notice,
+.dvb-stream-editor output,
+.dvb-stream-editor h3 { overflow-wrap: anywhere; }
+.dvb-stream-editor output { display: block; padding: 0.75rem; background: rgba(0, 95, 115, 0.06); border-radius: 4px; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; }
+.dvb-stream-editor .dialog-actions { margin: 0; padding: 0.8rem 1.2rem; flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 0.6rem; border-top: 1px solid var(--line); }
+.dvb-stream-editor .dialog-actions .notice { flex-basis: 100%; margin: 0; max-height: 15dvh; overflow: auto; }
+.dvb-stream-editor .dialog-actions button:first-of-type { margin-left: auto; }
+.dvb-stream-editor summary { cursor: pointer; color: var(--brand); padding: 0.5rem 0; }
+.dvb-stream-editor [aria-invalid="true"] { border-color: var(--danger, #a92135); outline: 1px solid var(--danger, #a92135); }
+.dvb-stream-editor [hidden] { display: none; }
+@media (max-width: 620px) {
+  .dvb-stream-editor { width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); }
+  .dvb-stream-editor form { max-height: calc(100dvh - 1rem - 2px); }
+  .dvb-stream-editor .dvb-editor-fields { grid-template-columns: minmax(0, 1fr); }
+  .dvb-stream-editor .dvb-editor-header,
+  .dvb-stream-editor .dvb-dialog-body,
+  .dvb-stream-editor .dialog-actions { padding: 0.75rem; }
+  .dvb-stream-editor fieldset { padding: 0.7rem; }
+  .dvb-stream-editor input:not([type="checkbox"]),
+  .dvb-stream-editor select,
+  .dvb-stream-editor button,
+  .dvb-stream-editor summary { min-height: 44px; }
+}

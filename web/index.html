@@ -1,0 +1,1174 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Copyright (C) Delitants -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AstraX</title>
+    <link rel="stylesheet" href="/app.css?v=26" />
+    <link rel="stylesheet" href="/dvb-management.css?v=27" />
+    <link rel="stylesheet" href="/api-management.css?v=1" />
+  </head>
+  <body>
+    <div class="orb orb-one"></div>
+    <div class="orb orb-two"></div>
+
+    <header class="topbar">
+      <div>
+        <h1>AstraX</h1>
+        <p class="sub">DVB Streaming Server</p>
+      </div>
+      <div class="status-pill" id="statusPill" role="status">Loading...</div>
+    </header>
+    <p id="globalActionNotice" class="notice global-action-notice" role="status" aria-live="polite" hidden></p>
+
+    <main class="layout">
+      <button type="button" id="menuToggle" class="menu-toggle" aria-controls="navTabs" aria-expanded="false">Menu <span id="currentPageLabel">Overview</span></button>
+      <nav class="sidebar" id="navTabs" aria-label="Main navigation">
+        <button type="button" data-tab="overview" class="active">Overview</button>
+        <button type="button" data-tab="streams">External Streams</button>
+        <button type="button" data-tab="dvb-cards">DVB Cards</button>
+        <button type="button" data-tab="dvb-streams">DVB Streams</button>
+        <button type="button" data-tab="softcams">Softcam</button>
+        <button type="button" data-tab="epg">EPG</button>
+        <button type="button" data-tab="api">API</button>
+        <button type="button" data-tab="settings">Settings</button>
+        <button type="button" data-tab="logs">Logs</button>
+      </nav>
+
+      <section class="content">
+        <article data-panel="overview" class="panel active">
+          <div class="cards">
+            <div class="card">
+              <h3>Version</h3>
+              <p id="versionVal">-</p>
+            </div>
+            <div class="card">
+              <h3>Uptime</h3>
+              <p id="uptimeVal">-</p>
+            </div>
+            <div class="card">
+              <h3>Streams</h3>
+              <p id="streamCountVal">-</p>
+            </div>
+            <div class="card">
+              <h3>Control Endpoint</h3>
+              <p id="endpointVal">-</p>
+            </div>
+          </div>
+
+          <div class="section-head with-gap">
+            <h2>Runtime Adapters</h2>
+          </div>
+          <p id="runtimeTableHint" class="hint">Scroll horizontally if columns are offscreen. Keyboard: focus the table, then use Left/Right keys.</p>
+          <div class="table-wrap" role="region" aria-label="Runtime adapters table" aria-describedby="runtimeTableHint" tabindex="0">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="overviewAdaptersBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article data-panel="streams" class="panel">
+          <div class="section-head">
+            <h2>External Streams</h2>
+            <button id="addStreamBtn">Add External Stream</button>
+          </div>
+          <p class="panel-description">External streams from HTTP, RTSP, SRT, UDP, or other sources for restreaming. DVB streams are managed under DVB Streams.</p>
+          <p id="streamsTableHint" class="hint">Scroll horizontally for all columns and actions. Keyboard: focus the table, then use Left/Right keys.</p>
+          <div class="table-wrap" role="region" aria-label="External streams table; scroll for full URLs and actions" aria-describedby="streamsTableHint" tabindex="0">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Input</th>
+                  <th>Output</th>
+                  <th>Protocol</th>
+                  <th>Softcam</th>
+                  <th>Enabled</th>
+                  <th>Runtime</th>
+                  <th>Bitrate</th>
+                  <th>Packets</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="streamsBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article data-panel="dvb-cards" class="panel dvb-page" aria-labelledby="dvbCardsTitle">
+          <div class="section-head">
+            <h2 id="dvbCardsTitle">DVB Cards</h2>
+            <button type="button" id="refreshDVBCardsBtn" disabled aria-describedby="dvbCardsNotice">Refresh</button>
+          </div>
+          <p class="dvb-intro">Hardware inventory, ownership and signal health.</p>
+          <div id="dvbCardsSummary" class="cards dvb-cards-summary" aria-label="DVB card summary">
+            <div class="card"><h3>Total cards</h3><p>-</p></div>
+            <div class="card"><h3>Available</h3><p>-</p></div>
+            <div class="card"><h3>Active</h3><p>-</p></div>
+            <div class="card"><h3>Externally busy</h3><p>-</p></div>
+            <div class="card"><h3>Error/offline</h3><p>-</p></div>
+          </div>
+          <p id="dvbCardsNotice" class="notice" role="status" aria-live="polite">Card inventory has not been loaded. Total includes configured offline cards.</p>
+          <p id="dvbCardsActionNotice" class="notice" role="status" aria-live="polite" hidden></p>
+          <div class="dvb-toolbar dvb-cards-toolbar" role="group" aria-label="Card filters and sorting">
+            <label for="dvbCardsSearch">Search cards
+              <input id="dvbCardsSearch" type="search" placeholder="Address, alias or model" disabled aria-describedby="dvbCardsNotice" />
+            </label>
+            <label for="dvbCardsStatus">Status
+              <select id="dvbCardsStatus" disabled aria-describedby="dvbCardsNotice"><option value="">All statuses</option></select>
+            </label>
+            <details class="dvb-card-filters">
+              <summary>Filters and sorting</summary>
+              <div class="dvb-toolbar">
+                <label for="dvbCardsDelivery">Delivery system
+                  <select id="dvbCardsDelivery" disabled aria-describedby="dvbCardsNotice"><option value="">All systems</option></select>
+                </label>
+                <label for="dvbCardsModel">Model
+                  <select id="dvbCardsModel" disabled aria-describedby="dvbCardsNotice"><option value="">All models</option></select>
+                </label>
+                <label for="dvbCardsSort">Sort cards
+                  <select id="dvbCardsSort" disabled aria-describedby="dvbCardsNotice">
+                    <option value="address">Address (numeric)</option>
+                    <option value="type">Type, then address (numeric)</option>
+                  </select>
+                </label>
+              </div>
+            </details>
+          </div>
+          <p id="dvbCardsLoading" class="notice" role="status" aria-live="polite" hidden>Loading card inventory...</p>
+          <p id="dvbCardsEmpty" class="notice" role="status" aria-live="polite" hidden>No cards match the current filters.</p>
+          <p id="dvbCardsError" class="notice err" role="alert" aria-live="polite" hidden>Card inventory could not be loaded.</p>
+          <div class="dvb-table-scroll" role="region" aria-label="DVB cards table" tabindex="0">
+            <table>
+              <thead><tr>
+                <th scope="col">Card</th>
+                <th scope="col">Hardware</th>
+                <th scope="col">Status/owner</th>
+                <th scope="col">Transport/usage</th>
+                <th scope="col">Signal</th>
+                <th scope="col">Actions</th>
+              </tr></thead>
+              <tbody id="dvbCardsTableBody"></tbody>
+            </table>
+          </div>
+          <div class="dvb-pagination" aria-label="DVB card pages">
+            <span id="dvbCardsPageInfo" aria-live="polite">Page - of -</span>
+            <label for="dvbCardsLimit">Cards per page
+              <select id="dvbCardsLimit" disabled aria-describedby="dvbCardsNotice">
+                <option value="50">50</option><option value="100" selected>100</option><option value="200">200</option>
+              </select>
+            </label>
+            <div class="actions">
+              <button type="button" id="dvbCardsPrev" disabled>Previous</button>
+              <button type="button" id="dvbCardsNext" disabled>Next</button>
+            </div>
+          </div>
+        </article>
+
+        <article data-panel="dvb-streams" class="panel dvb-page" aria-labelledby="dvbStreamsTitle">
+          <div class="section-head"><h2 id="dvbStreamsTitle">DVB Streams</h2><button type="button" id="refreshDVBStreamsBtn">Refresh</button></div>
+          <p class="dvb-intro">One group per stream. Requested assignment and actual placement are shown separately.</p>
+          <p id="dvbStreamsFreshness" class="hint" role="status" aria-live="polite">Connecting. Snapshot not loaded; rows are not live yet.</p>
+          <p id="dvbStreamsNotice" class="notice" role="status" aria-live="polite">Starting a scan, saving an enabled stream or applying a runtime bulk action can tune its assigned card. The update indicator shows whether rows are live or awaiting recovery.</p>
+          <div class="dvb-stream-layout">
+            <aside id="dvbGroupNav" class="dvb-group-rail" aria-labelledby="dvbGroupNavTitle">
+              <h3 id="dvbGroupNavTitle">Groups</h3>
+              <div class="dvb-group-entries"></div>
+            </aside>
+            <div class="dvb-stream-content">
+              <div class="dvb-stream-toolbar">
+                <label class="dvb-mobile-group" for="dvbGroupSelect">Stream group
+                  <select id="dvbGroupSelect" aria-describedby="dvbGroupNotice"></select>
+                </label>
+                <div class="actions dvb-group-actions" role="group" aria-label="Manage selected group">
+                  <button type="button" id="addDVBGroupBtn" disabled>Add group</button>
+                  <button type="button" id="renameDVBGroupBtn" disabled>Rename</button>
+                  <button type="button" id="deleteDVBGroupBtn" class="danger" disabled>Delete group</button>
+                  <button type="button" id="moveDVBGroupUpBtn" disabled>Move Up</button>
+                  <button type="button" id="moveDVBGroupDownBtn" disabled>Move Down</button>
+                </div>
+                <p id="dvbGroupNotice" class="hint" role="status" aria-live="polite">Group counts unknown until loaded.</p>
+                <p id="dvbGroupsError" class="notice err" role="alert" hidden></p>
+                <div class="dvb-toolbar dvb-stream-filters" role="group" aria-label="Stream filters and sorting">
+                  <label for="dvbStreamsSearch">Search streams<input id="dvbStreamsSearch" type="search" placeholder="Name or service" maxlength="256" /></label>
+                  <label for="dvbStreamsStatus">Status<select id="dvbStreamsStatus"><option value="">All statuses</option></select></label>
+                  <details class="dvb-stream-advanced">
+                    <summary>Stream filters and sorting</summary>
+                    <div class="dvb-toolbar">
+                      <label for="dvbStreamsDelivery">Delivery system<select id="dvbStreamsDelivery"><option value="">All systems</option></select></label>
+                      <label for="dvbStreamsRequestedAdapter">Requested adapter<select id="dvbStreamsRequestedAdapter"><option value="">All adapters</option></select></label>
+                      <label for="dvbStreamsActualAdapter">Actual adapter<select id="dvbStreamsActualAdapter"><option value="">All adapters</option></select></label>
+                      <label for="dvbStreamsProtocol">Protocol<select id="dvbStreamsProtocol"><option value="">All protocols</option></select></label>
+                      <label for="dvbStreamsDescramblingState">Descrambling state<select id="dvbStreamsDescramblingState"><option value="">All states</option></select></label>
+                      <label for="dvbStreamsDescramblingReason">Descrambling reason<select id="dvbStreamsDescramblingReason"><option value="">All reasons</option></select></label>
+                      <label for="dvbStreamsSort">Sort streams<select id="dvbStreamsSort"><option value="name">Name</option></select></label>
+                      <label for="dvbStreamsOrder">Sort order<select id="dvbStreamsOrder"><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
+                    </div>
+                  </details>
+                </div>
+                <div class="actions dvb-primary-actions">
+                  <button type="button" id="addDVBStreamBtn" disabled aria-describedby="dvbStreamsNotice">Add DVB Stream</button>
+                  <button type="button" id="openDVBScanBtn" disabled aria-describedby="dvbStreamsNotice">Scan and Import</button>
+                  <label class="dvb-selection-label" for="dvbSelectPage"><input id="dvbSelectPage" type="checkbox" disabled aria-describedby="dvbSelectionScope" />Select current page</label>
+                </div>
+              </div>
+              <p id="dvbStreamsLoading" class="hint" role="status" hidden>Loading bounded stream snapshot...</p>
+              <p id="dvbStreamsError" class="notice err" role="alert" hidden></p>
+              <p id="dvbStreamsEmpty" class="hint" role="status" hidden>No streams match these filters.</p>
+              <p id="dvbStreamsTableHint" class="hint">Current page. Expand Details or Output URL for full literal values.</p>
+              <div class="dvb-table-scroll" role="region" aria-label="DVB streams table" aria-describedby="dvbStreamsTableHint" tabindex="0">
+                <table>
+                  <thead><tr>
+                    <th scope="col">Name / group</th><th scope="col">Service / transponder</th><th scope="col">Requested card</th><th scope="col">Actual card</th><th scope="col">Output / state</th>
+                  </tr></thead>
+                  <tbody id="dvbStreamTableBody"></tbody>
+                </table>
+              </div>
+              <nav id="dvbStreamsPagination" class="dvb-pagination" aria-label="DVB stream pages">
+                <span id="dvbStreamsPageInfo" role="status" aria-live="polite">Page - of -</span>
+                <label for="dvbStreamsLimit">Rows per page<select id="dvbStreamsLimit"><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option></select></label>
+                <div class="actions"><button type="button" id="dvbStreamsPrev" disabled>Previous</button><button type="button" id="dvbStreamsNext" disabled>Next</button></div>
+              </nav>
+              <div id="dvbBulkBar" class="dvb-bulk-bar" role="group" aria-label="Selected stream actions" aria-describedby="dvbBulkNotice">
+                <span class="dvb-selection-count" role="status" aria-live="polite"><span id="dvbSelectedCount">0</span> selected</span>
+                <label for="dvbBulkAction">Action<select id="dvbBulkAction"><option value="start">Start</option><option value="stop">Stop</option><option value="restart">Restart</option><option value="move_group">Move group</option><option value="assign_adapter">Assign adapter</option><option value="delete">Delete</option></select></label>
+                <label for="dvbBulkGroup" hidden>Target group<select id="dvbBulkGroup"><option value="">Ungrouped</option></select></label>
+                <label for="dvbBulkAdapterMode" hidden>Requested adapter<select id="dvbBulkAdapterMode"><option value="auto">Auto</option><option value="fixed">Fixed card</option></select></label>
+                <label for="dvbBulkCard" hidden>Compatible card<select id="dvbBulkCard"><option value="">Select a card</option></select></label>
+                <div class="actions"><button id="dvbBulkApply" type="button" disabled>Apply</button><button id="dvbBulkClear" type="button" disabled>Clear selection</button></div>
+                <p id="dvbSelectionScope" class="hint">Select current page only, never all matching streams.</p>
+                <p id="dvbBulkTargetNotice" class="hint" hidden></p>
+                <p id="dvbBulkNotice" class="hint" role="status" aria-live="polite">Select streams on this page to apply an action.</p>
+              </div>
+              <details id="dvbBulkResults" class="dvb-bulk-results" hidden><summary>Per-stream results</summary><ul></ul></details>
+            </div>
+          </div>
+        </article>
+
+        <article data-panel="softcams" class="panel">
+          <p id="softcamNotice" class="notice" role="status" aria-live="polite" hidden></p>
+          <div class="section-head">
+            <h2>Softcam Profiles</h2>
+            <button id="addSoftcamBtn">New Softcam</button>
+          </div>
+          <p id="softcamsTableHint" class="hint">Scroll horizontally for all columns and actions. Keyboard: focus the table, then use Left/Right keys.</p>
+          <div class="table-wrap" role="region" aria-label="Softcam profiles table; scroll for all actions" aria-describedby="softcamsTableHint" tabindex="0">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Endpoint</th>
+                  <th>User</th>
+                  <th>Enabled</th>
+                  <th>Runtime</th>
+                  <th>Latency</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="softcamsBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article data-panel="epg" class="panel">
+          <h2>EPG Aggregator</h2>
+          <p class="panel-description">Configure external XMLTV sources and DVB EIT extraction for Electronic Program Guide aggregation. The merged EPG feed is available at <code>/api/v1/epg</code>.</p>
+          <section aria-labelledby="epgHealthTitle">
+            <div class="section-head">
+              <h3 id="epgHealthTitle">EPG Health</h3>
+              <button type="button" id="epgHealthRefresh" class="secondary">Refresh Health</button>
+            </div>
+            <p id="epgHealthSnapshot" class="hint">Health has not been loaded. Refresh is read-only and does not fetch sources or collect EIT.</p>
+            <div class="cards epg-health-cards" aria-label="EPG feed health">
+              <div class="card"><h3>Memory feed</h3><p id="epgHealthFeed">Unknown</p></div>
+              <div class="card"><h3>Channels</h3><p id="epgHealthChannels">-</p></div>
+              <div class="card"><h3>Programmes</h3><p id="epgHealthProgrammes">-</p></div>
+              <div class="card"><h3>Last merge</h3><p id="epgHealthMerge">-</p></div>
+            </div>
+            <p id="epgHealthNotice" class="notice" role="status" aria-live="polite" hidden></p>
+            <p id="epgHealthTableHint" class="hint">XMLTV sources are numbered in saved URL order. Times are UTC; cache ages are as of this snapshot. Scroll horizontally for all columns; keyboard users can focus the table and use Left/Right.</p>
+            <div class="epg-health-table" role="region" aria-label="EPG source health" aria-describedby="epgHealthTableHint" tabindex="0">
+              <table><thead><tr><th scope="col">Source</th><th scope="col">State</th><th scope="col">Last attempt</th><th scope="col">Last success</th><th scope="col">Cache age</th><th scope="col">Data</th></tr></thead>
+                <tbody id="epgHealthSources"></tbody>
+              </table>
+            </div>
+            <p id="epgHealthOutput" class="epg-health-output">Local output status unknown.</p>
+          </section>
+          <div class="section-divider"></div>
+          <h3>EPG Configuration &amp; Feed</h3>
+          <p id="epgStatus">Loading...</p>
+          <p class="hint">Configuration is not feed health. Check the cached XMLTV response; this does not fetch sources or collect DVB EIT.</p>
+          <div class="actions with-gap">
+            <button type="button" id="refreshEpgBtn" class="secondary">Check Cached Feed</button>
+            <a class="button-link secondary" href="/api/v1/epg" target="_blank" rel="noopener">View XMLTV Feed</a>
+          </div>
+          <div class="section-divider"></div>
+          <p id="epgFeedNotice" class="notice" role="status" aria-live="polite" hidden></p>
+          <form id="epgForm" class="form-grid">
+            <fieldset class="form-section"><legend>Sources</legend>
+              <label class="checkbox-row">
+                <input name="epg_enabled" type="checkbox" />
+                Enable EPG Aggregator
+              </label>
+              <label>
+                XMLTV Source URLs
+                <textarea name="epg_source_urls" rows="6" placeholder="https://example.com/epg.xml&#10;https://example.com/epg2.xml"></textarea>
+                <small class="hint">One URL per line. The aggregator fetches and merges external XMLTV sources. Streams with an XMLTV Channel ID will appear as channels in the merged feed.</small>
+              </label>
+              <label>
+                Source cache retention (hours)
+                <input name="epg_source_retention_hours" type="number" min="1" max="168" step="1" value="24" required />
+                <small class="hint">Keep last-good XMLTV data for 1-168 hours after a successful fetch. Failed fetches do not reset its age. The cache is in memory only and is lost on restart.</small>
+              </label>
+            </fieldset>
+            <fieldset class="form-section">
+              <legend>Fetch safeguards</legend>
+              <div class="epg-fetch-grid">
+                <label>Maximum source size (MiB)
+                  <input name="epg_max_source_mib" type="number" min="1" max="256" step="1" value="64" required />
+                  <span class="hint">1-256 MiB, measured after decompression.</span>
+                </label>
+                <label>Source timeout (seconds)
+                  <input name="epg_source_timeout_sec" type="number" min="1" max="120" step="1" value="30" required />
+                  <span class="hint">1-120 seconds for fetching and parsing.</span>
+                </label>
+                <label>Maximum programmes per source
+                  <input name="epg_max_programmes" type="number" min="1" max="1000000" step="1" value="500000" required />
+                  <span class="hint">1-1,000,000 programmes.</span>
+                </label>
+              </div>
+              <p class="hint">Limits reject a source without replacing its unexpired last-good data. Hard XML nesting limit: 64 levels. Changes apply to future fetches, not cached data.</p>
+            </fieldset>
+            <fieldset class="form-section"><legend>DVB collection</legend>
+              <label class="checkbox-row">
+                <input name="epg_from_dvb" type="checkbox" />
+                Collect EPG from DVB
+              </label>
+              <label>
+                Collection interval (seconds)
+                <input name="epg_dvb_interval_sec" type="number" min="60" max="86400" value="900" />
+                <small class="hint">How often to collect EIT tables from active DVB adapters.</small>
+              </label>
+              <label>
+                EPG depth
+                <select name="epg_dvb_depth">
+                  <option value="present_following">Present / Following only</option>
+                  <option value="schedule">Full schedule (up to 7 days)</option>
+                </select>
+              </label>
+              <label class="checkbox-row">
+                <input name="epg_dvb_priority" type="checkbox" />
+                DVB EPG takes priority over XMLTV
+              </label>
+            </fieldset>
+            <fieldset class="form-section"><legend>Output</legend>
+              <label>
+                Local XMLTV output path
+                <input name="epg_local_path" type="text" placeholder="/var/lib/astrax/epg.xml" />
+                <small class="hint">Optional local file path where the merged XMLTV feed is also written.</small>
+              </label>
+            </fieldset>
+            <div class="save-bar">
+              <p id="epgNotice" class="notice" role="status" aria-live="polite" hidden></p>
+              <button type="submit">Save EPG Settings</button>
+            </div>
+          </form>
+        </article>
+
+        <article data-panel="api" class="panel api-page" aria-labelledby="apiTitle">
+          <div class="section-head"><div><p class="api-eyebrow">AUTOMATION &amp; INTEGRATIONS</p><h2 id="apiTitle">API management</h2></div><button id="apiRefresh" type="button" class="secondary">Refresh status</button></div>
+          <p class="panel-description">A separate endpoint for your integrations. Disabling it never disables this management interface.</p>
+          <section class="api-status-strip" aria-label="External listener status">
+            <div><span class="api-label">Listener</span><strong id="apiListenerStatus" role="status">Not loaded</strong></div>
+            <div><span class="api-label">External base URL</span><code id="apiBaseURL">Not running</code></div>
+            <div><span class="api-label">Last checked</span><span id="apiCheckedAt">Not yet</span></div>
+          </section>
+          <p id="apiStatusNotice" class="notice" role="status" hidden></p>
+          <div class="api-config-grid">
+            <section class="api-section" aria-labelledby="apiListenerTitle">
+              <h3 id="apiListenerTitle">Listener settings</h3>
+              <p class="hint">Create an active token before enabling. TLS uses the certificate configured in Settings.</p>
+              <form id="apiSettingsForm">
+                <fieldset id="apiSettingsFields" disabled><legend class="api-sr-only">External listener configuration</legend>
+                  <label class="checkbox-row"><input name="enabled" type="checkbox" />Enable external API</label>
+                  <div class="api-fields"><label>Listen address<input name="listen_address" required autocomplete="off" placeholder="127.0.0.1" /></label><label>Port<input name="port" required type="number" min="1" max="65535" /></label></div>
+                  <label class="checkbox-row"><input name="tls" type="checkbox" />Use TLS (HTTPS)</label>
+                  <label>Allowed CORS origins<textarea name="allowed_origins" rows="3" spellcheck="false" placeholder="https://console.example.com"></textarea><small class="hint">One exact origin per line. No wildcards. Empty means no cross-origin browser access.</small></label>
+                </fieldset>
+                <p id="apiSettingsNotice" class="notice" role="status" hidden></p>
+                <button id="apiApply" type="submit" disabled>Apply listener settings</button>
+              </form>
+            </section>
+            <section class="api-section" aria-labelledby="apiTokensTitle">
+              <div class="section-head"><h3 id="apiTokensTitle">Access tokens</h3><button id="apiTokenNew" type="button">Create token</button></div>
+              <p class="hint">Named, scoped and independently revocable. Admin does not include read or stream control.</p>
+              <p id="apiTokensNotice" class="notice" role="status" hidden></p>
+              <p id="apiTokensHint" class="hint">Scroll horizontally for dates and actions; keyboard users can focus the table and use arrow keys.</p>
+              <div class="table-wrap" tabindex="0" role="region" aria-label="API access tokens" aria-describedby="apiTokensHint"><table><thead><tr><th>Name / prefix</th><th>Scopes</th><th>Created / last used</th><th>Status / action</th></tr></thead><tbody id="apiTokensBody"><tr><td colspan="4">Tokens not loaded</td></tr></tbody></table></div>
+            </section>
+          </div>
+          <section id="apiDocs" class="api-section" aria-labelledby="apiDocsTitle">
+            <div class="section-head"><div><p class="api-eyebrow">LOCAL REFERENCE</p><h3 id="apiDocsTitle">Explore the API</h3></div><a class="button-link secondary" href="/api/v1/api/openapi.json" download="astrax-openapi.json">Download OpenAPI</a></div>
+            <p class="hint">Documentation and in-process requests remain available while the listener is disabled.</p>
+            <p id="apiDocsNotice" class="notice" role="status" hidden></p>
+            <div class="api-doc-grid">
+              <div class="api-operation-nav"><label>Resource group<select id="apiDocTag"><option value="">All groups</option></select></label><label>Find operation<input id="apiDocSearch" type="search" placeholder="Method, path or summary" /></label><label>Operation<select id="apiDocOperation" size="9"></select></label></div>
+              <div class="api-operation-detail">
+                <h4 id="apiOperationTitle">Select an operation</h4><code id="apiOperationPath"></code><p id="apiOperationScope" class="hint"></p><p id="apiOperationDescription"></p>
+                <details><summary>Parameters</summary><pre id="apiDocParameters"></pre></details>
+                <details><summary>Request schema and example</summary><pre id="apiDocRequest"></pre></details>
+                <details><summary>Response schemas and examples</summary><pre id="apiDocResponses"></pre></details>
+                <details><summary>curl example</summary><p class="hint">Set ASTRAX_API_URL to your external origin and ASTRAX_API_TOKEN in your shell. For a body, put the unchanged editor text in request.json; curl sends that file without rounding numbers.</p><pre id="apiCurl"></pre></details>
+                <form id="apiTryForm" class="api-try-form">
+                  <h4>Try request</h4><p class="api-warning">Not a dry run. Authorized mutations change configuration or running streams. This does not test network reachability, TLS or CORS.</p>
+                  <div id="apiTryParameters" class="api-fields"></div>
+                  <label>Bearer token<input id="apiTryToken" type="password" autocomplete="off" spellcheck="false" aria-describedby="apiTryTokenHint" /><small id="apiTryTokenHint" class="hint">Session only. Cleared when you leave this page. Never included in curl samples.</small></label>
+                  <label>JSON request body<textarea id="apiTryBody" rows="5" spellcheck="false" placeholder="{}"></textarea></label>
+                  <button id="apiTrySubmit" type="submit" disabled>Run request</button>
+                  <p id="apiTryNotice" class="notice" role="status" hidden></p>
+                </form>
+                <details id="apiTryResult" hidden open><summary id="apiTryResultTitle">Response</summary><pre id="apiTryResponse"></pre></details>
+              </div>
+            </div>
+          </section>
+        </article>
+
+        <article data-panel="settings" class="panel">
+          <h2>Settings</h2>
+          <form id="settingsForm" class="form-grid">
+            <fieldset class="form-section"><legend>Playback ports</legend>
+              <label>
+                <span class="label-text">HTTP Play Port</span>
+                <input name="http_play_port" type="number" min="1" required aria-describedby="httpPlayHelp" />
+                <small id="httpPlayHelp" class="hint">TCP port for MPEG-TS and HLS playback streams.</small>
+              </label>
+              <label>
+                <span class="label-text">Global SRT Port</span>
+                <input name="srt_play_port" type="number" min="1" max="65535" required aria-describedby="srtPlayHelp" />
+                <small id="srtPlayHelp" class="hint">Default UDP port for SRT listener mode.</small>
+              </label>
+              <label>
+                <span class="label-text">Playlist Name</span>
+                <input name="playlist_name" type="text" required aria-describedby="playlistHelp" />
+                <small id="playlistHelp" class="hint">Name used for the generated M3U playlist file.</small>
+              </label>
+            </fieldset>
+            <fieldset class="form-section"><legend>Control listener</legend>
+              <label>
+                <span class="label-text">Management HTTP access</span>
+                <input name="control_listen" type="text" required aria-describedby="controlHelp" />
+                <small id="controlHelp" class="hint">Control HTTP API listen address, for example 127.0.0.1:8080. Keep a reachable control address when changing listener settings.</small>
+              </label>
+            </fieldset>
+            <fieldset class="form-section"><legend>HTTPS</legend>
+              <label>
+                <span class="label-text">HTTPS access</span>
+                <input name="control_listen_https" type="text" aria-describedby="httpsHelp" />
+                <small id="httpsHelp" class="hint">HTTPS control panel listen address, for example 127.0.0.1:8443. Saving configuration does not verify an active HTTPS listener.</small>
+              </label>
+              <label class="checkbox-row">
+                <input name="redirect_https" type="checkbox" />
+                Redirect HTTP to HTTPS
+              </label>
+              <label>
+                <span class="label-text">Min TLS Version</span>
+                <select name="tls_min_version" aria-describedby="tlsHelp">
+                  <option value="1.2">TLS 1.2</option>
+                  <option value="1.3">TLS 1.3</option>
+                </select>
+                <small id="tlsHelp" class="hint">Minimum TLS version for HTTPS connections.</small>
+              </label>
+            </fieldset>
+            <div class="save-bar">
+              <p id="settingsNotice" class="notice" role="status" aria-live="polite" hidden></p>
+              <button type="submit">Save Settings</button>
+            </div>
+          </form>
+
+          <div class="section-divider"></div>
+
+          <fieldset class="form-section certificates"><legend>Certificates</legend>
+            <p class="panel-description">Manage TLS certificates for HTTPS control panel and secure stream outputs.</p>
+            <p class="hint">Private keys are sensitive. Use a matching certificate/key pair and preserve control access. Verify the active listener separately; stored certificates do not prove HTTPS is serving.</p>
+            <p id="certStatus" class="notice">Certificate status unavailable.</p>
+            <div class="actions with-gap">
+              <button type="button" id="generateCertBtn" class="secondary">Generate Self-Signed</button>
+              <button type="button" id="uploadCertBtn" class="secondary">Upload Certificate</button>
+              <button type="button" id="deleteCertBtn" class="danger">Delete Certificates</button>
+            </div>
+          </fieldset>
+        </article>
+
+        <article data-panel="logs" class="panel">
+          <div class="section-head">
+            <h2>Logs</h2>
+            <button id="refreshLogsBtn" class="secondary">Refresh</button>
+          </div>
+          <div class="log-view-controls" role="group" aria-label="Displayed log filters">
+            <label for="logViewSearch">Search displayed logs<input id="logViewSearch" type="search" /></label>
+            <label for="logViewLevel">Displayed severity
+              <select id="logViewLevel"><option value="">All severities</option><option value="debug">debug</option><option value="info">info</option><option value="warn">warn</option><option value="error">error</option></select>
+            </label>
+          </div>
+          <p id="logsViewNotice" class="hint">Showing the latest received snapshot (up to 200 entries). Filters affect this view only; no automatic live-follow scrolling. Use Refresh to request another snapshot.</p>
+          <div id="logsBox" class="logs" role="region" aria-label="Displayed logs" tabindex="0"></div>
+          <h3>Logging configuration</h3>
+          <p class="hint">Recording settings affect future logging, not the displayed filters.</p>
+          <p class="hint">The minimum level applies to new entries in this application's log buffer, not existing entries or the system journal.</p>
+          <form id="logSettingsForm" class="log-settings-form">
+            <label>
+              Recorded minimum level
+              <select name="log_level">
+                <option value="debug">debug</option>
+                <option value="info">info</option>
+                <option value="warn">warn</option>
+                <option value="error">error</option>
+              </select>
+            </label>
+            <button type="submit">Save Recording Settings</button>
+            <p id="logSettingsNotice" class="notice" role="status" aria-live="polite" hidden></p>
+          </form>
+        </article>
+      </section>
+    </main>
+
+    <dialog id="cardSettingsDialog" class="dvb-dialog dvb-card-dialog" aria-labelledby="cardSettingsDialogTitle" aria-describedby="cardSettingsContext">
+      <form id="cardSettingsForm" class="form-grid" novalidate>
+        <header class="dvb-dialog-header">
+          <h3 id="cardSettingsDialogTitle" tabindex="-1" autofocus>Card settings</h3>
+          <p id="cardSettingsContext" class="hint">Desired settings are not proof of successful hardware application or tuning.</p>
+        </header>
+        <div class="dvb-dialog-body">
+          <p id="cardSettingsNotice" class="notice" role="status" aria-live="polite"></p>
+          <fieldset disabled>
+            <legend>General</legend>
+            <div class="dvb-settings-fields">
+              <label>Alias<input name="alias" type="text" autocomplete="off" /></label>
+              <label class="checkbox-row"><input name="enabled" type="checkbox" />Enabled for AstraX</label>
+            </div>
+          </fieldset>
+          <fieldset disabled>
+            <legend>RF / LNB</legend>
+            <label>LNB mode<select name="rf_mode"><option value="universal">Universal</option><option value="custom">Custom</option><option value="unicable1">Unicable I (EN50494)</option><option value="unicable2">Unicable II (EN50607)</option></select></label>
+            <p id="cardRFHint" class="hint"></p>
+            <div class="dvb-settings-fields" data-rf-section="lnb">
+              <label>Low oscillator (MHz)<input name="lof1" type="number" min="0" step="1" required /></label>
+              <label>High oscillator (MHz)<input name="lof2" type="number" min="0" step="1" required /></label>
+              <label>Band switch (MHz)<input name="slof" type="number" min="0" step="1" required /></label>
+              <label class="checkbox-row"><input name="force_tone" type="checkbox" />Force 22 kHz tone</label>
+            </div>
+            <div class="dvb-settings-fields" data-rf-section="unicable" hidden>
+              <label>User-band slot<select name="unicable_slot" aria-describedby="cardRFHint"></select></label>
+              <label>Satellite position<select name="slot_position"><option value="A">A</option><option value="B">B</option></select></label>
+              <label>User-band frequency (MHz)<input name="slot_frequency" type="number" min="0" step="1" required /></label>
+            </div>
+          </fieldset>
+          <fieldset disabled>
+            <legend>Advanced</legend>
+            <div class="dvb-settings-fields">
+              <label class="checkbox-row"><input name="enable_monitoring" type="checkbox" />Enable monitoring</label>
+              <label>Timeout (seconds)<input name="timeout_sec" type="number" min="0" step="1" required /></label>
+              <label>DVB API<select name="dvb_api"><option value="v5">v5</option><option value="v3">v3 (legacy DVB-S)</option></select></label>
+            </div>
+            <p class="hint">Existing modulation, FEC, rolloff, stream ID and legacy API flag are retained. Changing the API updates its legacy flag. No new tuning controls are applied here.</p>
+            <dl id="cardAdvancedRetained" class="dvb-retained-values"></dl>
+          </fieldset>
+        </div>
+        <footer class="dialog-actions"><button type="button" id="cardSettingsClose">Close</button><button type="submit" id="cardSettingsSave" disabled>Save desired settings</button></footer>
+      </form>
+    </dialog>
+
+    <dialog id="cardRestartDialog" class="dvb-dialog dvb-card-dialog" aria-labelledby="cardOperationTitle" aria-describedby="cardOperationContext">
+      <div class="dvb-operation-content">
+        <header class="dvb-dialog-header">
+          <h3 id="cardOperationTitle" tabindex="-1" autofocus>Card restart</h3>
+          <p id="cardOperationContext" class="hint">Closing stops status updates, not the server operation. Reopen Restart progress to check its outcome.</p>
+        </header>
+        <div class="dvb-dialog-body">
+          <p id="cardOperationStatus" class="notice" role="status" aria-live="polite"></p>
+          <p id="cardOperationError" class="notice err" role="alert" hidden></p>
+          <ul id="cardOperationStreams" aria-label="Per-stream restart results"></ul>
+        </div>
+        <footer class="dialog-actions"><button type="button" id="cardOperationRetry" hidden>Retry status read</button><button type="button" id="cardOperationClose">Close</button></footer>
+      </div>
+    </dialog>
+
+    <dialog id="dvbGroupDialog" class="dvb-dialog dvb-group-dialog" aria-labelledby="dvbGroupDialogTitle">
+      <form id="dvbGroupForm">
+        <header class="dvb-dialog-head"><h3 id="dvbGroupDialogTitle" tabindex="-1" autofocus>Create group</h3></header>
+        <div class="dvb-dialog-body">
+          <p class="hint">One group per stream. Deleting a group moves its streams to Ungrouped; it never deletes streams.</p>
+          <label for="dvbGroupName">Group name<input id="dvbGroupName" name="name" required autocomplete="off" /></label>
+          <p id="dvbGroupError" class="notice" role="status" aria-live="polite" hidden></p>
+        </div>
+        <div class="dialog-actions"><button type="button" id="dvbGroupCancel">Cancel</button><button type="submit" id="dvbGroupSave">Save group</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="dvbStreamDialog" class="dvb-dialog dvb-stream-editor" aria-labelledby="dvbStreamDialogTitle" aria-describedby="dvbStreamContext">
+      <form id="dvbStreamForm" novalidate>
+        <header class="dvb-editor-header">
+          <h3 id="dvbStreamDialogTitle" tabindex="-1" autofocus>DVB stream</h3>
+          <p id="dvbStreamContext" class="hint">Desired configuration, not proof of tuning. Saving an enabled stream can tune its assigned card.</p>
+        </header>
+        <div class="dvb-dialog-body">
+          <fieldset data-dvb-editor-section="identity" disabled>
+            <legend>Identity and group</legend>
+            <div class="dvb-editor-fields">
+              <label>Name<input name="name" type="text" required autocomplete="off" /></label>
+              <label>Group<select name="group_id"><option value="">Ungrouped</option></select></label>
+              <label class="checkbox-row"><input name="enabled" type="checkbox" checked />Enabled</label>
+            </div>
+            <p id="dvbStreamRuntimeWarning" class="hint" role="status" hidden></p>
+          </fieldset>
+          <fieldset data-dvb-editor-section="tuning" disabled>
+            <legend>Delivery, tuning and service</legend>
+            <div class="dvb-editor-fields">
+              <label>Delivery system<select name="delivery_system"><option value="dvbs2">DVB-S2</option><option value="dvbs">DVB-S</option><option value="dvbc">DVB-C</option><option value="dvbt">DVB-T</option><option value="dvbt2">DVB-T2</option></select></label>
+              <label>Frequency (MHz)<input name="frequency_mhz" type="number" min="0.001" step="0.001" required /></label>
+              <label data-dvb-symbol>Symbol rate (kS/s)<input name="symbol_rate_ksps" type="number" min="0" step="0.001" /></label>
+              <label data-dvb-satellite>Polarization<select name="polarization"><option value="H">Horizontal (H)</option><option value="V">Vertical (V)</option></select></label>
+              <label>Modulation<select name="modulation" aria-describedby="dvbStreamModulationWarning"><option value="auto">Auto</option><option value="qpsk">QPSK</option><option value="8psk">8PSK</option><option value="16apsk">16APSK</option><option value="32apsk">32APSK</option></select></label>
+              <label>FEC<select name="fec"><option value="">Inherit fallback / card setting</option><option value="auto">Auto (overrides fallback)</option><option value="1/2">1/2</option><option value="2/3">2/3</option><option value="3/4">3/4</option><option value="3/5">3/5</option><option value="4/5">4/5</option><option value="5/6">5/6</option><option value="6/7">6/7</option><option value="7/8">7/8</option><option value="8/9">8/9</option><option value="9/10">9/10</option></select></label>
+              <label data-dvb-satellite>Roll-off<select name="rolloff"><option value="">Inherit fallback / card setting</option><option value="auto">Auto (overrides fallback)</option><option value="35">0.35</option><option value="25">0.25</option><option value="20">0.20</option></select></label>
+              <label data-dvb-satellite>Input stream ID (DVB-S2 ISI 0-255)<input name="stream_id" type="text" inputmode="numeric" aria-describedby="dvbStreamTuningHint" /></label>
+              <label>Service ID (SID)<input name="service_id" type="number" min="1" max="65535" step="1" required /></label>
+              <label>Video PID (optional)<input name="video_pid" type="number" min="0" max="8191" step="1" /></label>
+              <label>Audio PIDs (comma-separated)<input name="audio_pids" type="text" inputmode="text" placeholder="102, 103, 104" /></label>
+              <label>PCR PID (optional)<input name="pcr_pid" type="number" min="0" max="8191" step="1" /></label>
+            </div>
+            <p class="hint">SID: 1-65535. PIDs: 0-8191; blank optional PIDs are omitted. All audio PIDs are retained.</p>
+            <p id="dvbStreamModulationWarning" class="hint" role="status" hidden></p>
+            <p id="dvbStreamTuningWarning" class="hint" role="status" hidden></p>
+            <p id="dvbStreamTuningHint" class="hint">Empty primary tuning inherits Advanced, then card defaults. Auto is an explicit override, not inheritance. ISI must be decimal 0-255 for DVB-S2; DVB-S needs no effective ISI, including inherited values. Card inventory is a snapshot, not proof of future placement or tuning.</p>
+            <p id="dvbStreamMetadata" class="hint"></p>
+          </fieldset>
+          <fieldset data-dvb-editor-section="adapter-rf" disabled>
+            <legend>Adapter and RF</legend>
+            <div class="dvb-editor-fields">
+              <label>Assignment<select name="adapter_mode"><option value="auto">Auto</option><option value="fixed">Fixed card</option></select></label>
+              <label data-dvb-fixed>Fixed card<select name="device_key" aria-describedby="dvbStreamAdapterWarning"></select></label>
+            </div>
+            <p id="dvbStreamAdapterWarning" class="hint" role="status"></p>
+            <div data-dvb-satellite>
+              <label class="checkbox-row"><input name="rf_override" type="checkbox" />Override card RF defaults</label>
+              <div data-dvb-rf hidden>
+                <label>LNB mode<select name="rf_mode"><option value="universal">Universal</option><option value="custom">Custom</option><option value="unicable1">Unicable I (EN50494)</option><option value="unicable2">Unicable II (EN50607)</option></select></label>
+                <div class="dvb-editor-fields" data-dvb-lnb>
+                  <label>Low oscillator (MHz)<input name="lof1" type="number" min="1" step="1" /></label>
+                  <label>High oscillator (MHz)<input name="lof2" type="number" min="1" step="1" /></label>
+                  <label>Band switch (MHz)<input name="slof" type="number" min="1" step="1" /></label>
+                  <label class="checkbox-row"><input name="force_tone" type="checkbox" />Force 22 kHz tone</label>
+                </div>
+                <div class="dvb-editor-fields" data-dvb-unicable hidden>
+                  <label>User-band slot<input name="unicable_slot" type="number" min="1" max="32" step="1" /></label>
+                  <label>User-band frequency (MHz)<input name="slot_frequency" type="number" min="1" step="1" /></label>
+                </div>
+                <label>Satellite position<select name="slot_position"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></label>
+                <p class="hint">Unicable I: slots 1-8, positions A-B; Unicable II: slots 1-32, positions A-D. Standard LNB modes support positions A-D. RF frequencies stay in MHz. Hidden oscillator values are retained. No additional DiSEqC commands are configured here.</p>
+              </div>
+            </div>
+          </fieldset>
+          <fieldset data-dvb-editor-section="output" disabled>
+            <legend>Output</legend>
+            <label>Protocol<select name="protocol"><option value="mpegts">MPEG-TS</option><option value="mpegts-secure">MPEG-TS (HTTPS)</option><option value="hls">HLS</option><option value="hls-secure">HLS (HTTPS)</option><option value="srt">SRT</option><option value="udp">UDP</option><option value="http">HTTP</option><option value="rtsp">RTSP</option><option value="rtsp-secure">RTSP secure</option></select></label>
+            <label data-dvb-output="http">HTTP play path<input name="mpegts_path" type="text" placeholder="/channel1" /></label>
+            <div class="dvb-editor-fields" data-dvb-output="srt" hidden>
+              <label>SRT mode<select name="srt_mode"><option value="listener">Listener</option><option value="caller">Caller</option></select></label>
+              <label>SRT host<input name="srt_host" type="text" /></label>
+              <label>SRT port override (optional)<input name="srt_port_override" type="number" min="1" max="65535" step="1" /></label>
+              <label>SRT stream ID<input name="srt_streamid" type="text" /></label>
+              <label>SRT passphrase<input name="srt_passphrase" type="password" autocomplete="new-password" /></label>
+              <label>SRT key length<select name="srt_pbkeylen"><option value="16">16 bytes</option><option value="24">24 bytes</option><option value="32">32 bytes</option></select></label>
+              <label>SRT latency (ms)<input name="srt_latency" type="number" min="20" max="8000" step="1" /></label>
+              <label class="checkbox-row"><input name="srt_fec_enabled" type="checkbox" />SRT FEC packetfilter</label>
+              <label data-dvb-fec>FEC columns<input name="srt_fec_cols" type="number" min="1" max="64" step="1" /></label>
+              <label data-dvb-fec>FEC rows<input name="srt_fec_rows" type="number" min="1" max="64" step="1" /></label>
+            </div>
+            <div class="dvb-editor-fields" data-dvb-output="udp" hidden>
+              <label>UDP host<input name="udp_host" type="text" /></label>
+              <label>UDP port<input name="udp_port" type="number" min="1" max="65535" step="1" /></label>
+            </div>
+            <label data-dvb-output="other" hidden>Output URL<input name="output_url" type="password" autocomplete="off" /></label>
+            <p class="hint">HTTP and SRT defaults use the loaded server play ports. An untouched output keeps its exact original URL. Changing output fields rebuilds it, including replacing unrepresented URL parameters. Secrets are hidden in the preview.</p>
+            <label>Output preview<output id="dvbStreamOutputPreview" aria-live="polite"></output></label>
+          </fieldset>
+          <fieldset id="dvbDescramblingPanel" data-dvb-editor-section="descrambling" disabled>
+            <legend>Descrambling</legend>
+            <div class="dvb-editor-fields">
+              <label>Softcam profile<select name="softcam_id"><option value="">None</option></select></label>
+              <label class="checkbox-row"><input name="descrambling_enabled" type="checkbox" />Enable descrambling</label>
+              <label>Algorithm<select name="descrambling_algorithm"><option value="dvb-csa">DVB-CSA</option></select></label>
+              <label>CAID (4 hex digits)<input name="descrambling_caid" type="text" maxlength="4" autocomplete="off" placeholder="0100" /></label>
+              <label>Provider (6 hex digits)<input name="descrambling_provider" type="text" maxlength="6" autocomplete="off" placeholder="000000" aria-describedby="dvbDescramblingPolicyHint" /></label>
+              <label>ECM PID (optional)<input name="descrambling_ecm_pid" type="number" min="1" max="8190" step="1" /></label>
+            </div>
+            <p class="hint" id="dvbDescramblingPolicyHint">Enter the provider explicitly; it is not inferred from CA descriptors. Leave ECM PID empty only for an unambiguous matching route. Selecting a profile or PID does not enable descrambling.</p>
+            <p class="hint">Changing an active policy discards pending keys and media for that service. These controls do not request an adapter restart.</p>
+            <dl class="dvb-descrambling-status" aria-label="Independent cached runtime diagnostics">
+              <div><dt>RF state</dt><dd id="dvbDescramblingRF">Not checked</dd></div>
+              <div><dt>Profile authentication</dt><dd id="dvbDescramblingAuth">Not checked</dd></div>
+              <div><dt>ECM / key eligibility</dt><dd id="dvbDescramblingState">Not checked</dd></div>
+              <div><dt>Reason</dt><dd id="dvbDescramblingReason">Not checked</dd></div>
+              <div><dt>CSA backend</dt><dd id="dvbDescramblingBackend">Not checked</dd></div>
+            </dl>
+            <p id="dvbDescramblingMetrics" class="hint">Counters not measured</p>
+            <p id="dvbDescramblingSample" class="hint">Sample freshness not checked</p>
+            <p id="dvbDescramblingIdentity" class="hint">Cached service identity not checked</p>
+            <p class="hint">Processed payload counts are not proof of decoded picture or audio. Saved configuration is separate from runtime acceptance.</p>
+            <details id="dvbDescramblingAccess">
+              <summary>Cached CA candidates and diagnostics</summary>
+              <p class="hint">Optional read-only request. Use an existing read-scoped API token; it stays in this dialog only and is cleared on close or navigation. No tune, scan or ECM request is triggered.</p>
+              <p class="hint">Use HTTPS or a trusted local connection: HTTP sends the token without transport encryption.</p>
+              <div class="dvb-descrambling-access">
+                <label>Read-scoped token<input id="dvbDescramblingToken" type="password" autocomplete="off" spellcheck="false" /></label>
+                <button id="dvbDescramblingLoad" type="button">Load cached candidates</button>
+              </div>
+              <p id="dvbDescramblingDiagnosticNotice" class="hint" role="status" aria-live="polite"></p>
+              <ul id="dvbDescramblingCandidates" class="dvb-descrambling-candidates" aria-label="Cached CA candidates"></ul>
+            </details>
+          </fieldset>
+          <fieldset data-dvb-editor-section="options-advanced" disabled>
+            <legend>Options and advanced</legend>
+            <div class="dvb-editor-fields">
+              <label>XMLTV channel ID<input name="xmltv_channel_id" type="text" /></label>
+              <label class="checkbox-row"><input name="on_demand" type="checkbox" />On demand</label>
+              <label>On-demand timeout (seconds)<input name="on_demand_timeout_sec" type="number" min="5" max="3600" step="1" /></label>
+              <label class="checkbox-row"><input name="enable_monitoring" type="checkbox" />Enable monitoring</label>
+              <label>Tuning timeout (seconds)<input name="timeout_sec" type="number" min="0" step="1" /></label>
+              <label>DVB API<select name="dvb_api"><option value="">Default</option><option value="v5">v5</option><option value="v3">v3</option></select></label>
+              <label class="checkbox-row"><input name="dvb_api_v3" type="checkbox" />Legacy DVB API v3 flag</label>
+            </div>
+            <details><summary>Advanced tuning fallbacks</summary>
+              <p class="hint">Advanced values apply only when the primary value is empty/unset. Primary Auto overrides them. Empty Advanced values inherit card defaults. Inactive configured fallbacks are retained; effective values must match the runtime before an enabled save.</p>
+              <div class="dvb-editor-fields">
+                <label>Fallback modulation<select name="advanced_modulation" aria-describedby="dvbStreamModulationWarning"><option value="auto">Auto</option></select></label>
+                <label>Fallback FEC<select name="advanced_fec"><option value="">Inherit card setting</option></select></label>
+                <label data-dvb-satellite>Fallback roll-off<select name="advanced_rolloff"><option value="">Inherit card setting</option></select></label>
+                <label data-dvb-satellite>Fallback input stream ID (DVB-S2 ISI 0-255)<input name="advanced_stream_id" type="text" inputmode="numeric" aria-describedby="dvbStreamTuningHint" /></label>
+              </div>
+            </details>
+          </fieldset>
+        </div>
+        <footer class="dialog-actions">
+          <p id="dvbStreamNotice" class="notice" role="status" aria-live="polite"></p>
+          <button type="button" id="dvbStreamClose">Close</button>
+          <button type="submit" id="dvbStreamSave" disabled>Save stream</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="dvb-scan-dialog" class="dvb-dialog dvb-stream-editor dvb-scan-editor" aria-labelledby="dvb-scan-title" aria-describedby="dvb-scan-warning">
+      <form id="dvb-scan-form" novalidate>
+        <header class="dvb-editor-header">
+          <h3 id="dvb-scan-title">Scan and Import</h3>
+          <p id="dvb-scan-warning" class="hint">Start tunes a physical card and may interrupt outputs. Closing only stops polling, not the server scan. Reopen to resume the known job. Cached availability does not guarantee tuning.</p>
+        </header>
+        <div class="dvb-dialog-body">
+          <fieldset id="dvb-scan-tuning"><legend>1. Transport and physical card</legend>
+            <div class="dvb-editor-fields">
+              <label>Delivery system<select name="scan_delivery_system"><option value="dvbs2">DVB-S2</option><option value="dvbs">DVB-S</option></select></label>
+              <label>Scan adapter<select name="scan_adapter_mode"><option value="auto">Auto</option><option value="fixed">Fixed physical card</option></select></label>
+              <label data-scan-fixed>Physical card<select name="scan_device_key"><option value="">Select a card</option></select></label>
+              <label>Frequency (MHz)<input name="scan_frequency_mhz" inputmode="decimal" placeholder="11494" /></label>
+              <label>Symbol rate (kS/s)<input name="scan_symbol_rate_ksps" inputmode="decimal" placeholder="27500" /></label>
+              <label>Polarization<select name="scan_polarization"><option value="H">H</option><option value="V">V</option></select></label>
+              <label>Modulation<select name="scan_modulation"><option value="auto">Auto</option><option value="">Inherit card default</option><option value="qpsk">QPSK</option><option value="8psk">8PSK</option><option value="16apsk">16APSK</option><option value="32apsk">32APSK</option></select></label>
+              <label>FEC<select name="scan_fec"><option value="auto">Auto</option><option value="">Inherit card default</option><option>1/2</option><option>2/3</option><option>3/4</option><option>3/5</option><option>4/5</option><option>5/6</option><option>6/7</option><option>7/8</option><option>8/9</option><option>9/10</option></select></label>
+              <label>Roll-off<select name="scan_rolloff"><option value="auto">Auto</option><option value="">Inherit card default</option><option value="35">0.35</option><option value="25">0.25</option><option value="20">0.20</option></select></label>
+              <label>Input stream ID (ISI, 0-255)<input name="scan_stream_id" inputmode="numeric" placeholder="Inherit card default" /></label>
+            </div>
+            <label class="checkbox-row"><input type="checkbox" name="scan_rf_override" />Override card RF defaults</label>
+            <div data-scan-rf hidden>
+              <div class="dvb-editor-fields">
+                <label>LNB / RF mode<select name="scan_rf_mode"><option value="universal">Universal LNB</option><option value="custom">Custom LOF</option><option value="unicable1">Unicable I (EN50494)</option><option value="unicable2">Unicable II (EN50607)</option></select></label>
+                <label>DiSEqC / satellite position<select name="scan_slot_position"><option>A</option><option>B</option><option>C</option><option>D</option></select></label>
+                <label>LOF low (MHz)<input name="scan_lof1" inputmode="numeric" value="9750" /></label>
+                <label>LOF high (MHz)<input name="scan_lof2" inputmode="numeric" value="10600" /></label>
+                <label>Band switch (MHz)<input name="scan_slof" inputmode="numeric" value="11700" /></label>
+              </div>
+              <label class="checkbox-row"><input name="scan_force_tone" type="checkbox" />Force tone</label>
+              <div class="dvb-editor-fields" data-scan-unicable hidden>
+                <label>Unicable slot (1-based)<input name="scan_unicable_slot" inputmode="numeric" value="1" /></label>
+                <label>User-band frequency (MHz)<input name="scan_slot_frequency" inputmode="numeric" value="1210" /></label>
+              </div>
+            </div>
+            <p id="dvb-scan-tuning-error" class="hint" role="status"></p>
+          </fieldset>
+          <section aria-label="Scan progress"><p id="dvb-scan-progress" class="hint">No scan started.</p><output id="dvb-scan-signal">Signal: unavailable / SNR: unavailable / BER: unavailable / UNC: unavailable</output></section>
+          <fieldset id="dvb-scan-selection"><legend>2. Discovered services</legend>
+            <label for="dvb-scan-search">Search services<input id="dvb-scan-search" type="search" maxlength="256" placeholder="SID, name, provider, language, PID, CAID" /></label>
+            <div class="actions"><button id="dvb-scan-select-all" type="button">Select all matching</button><button id="dvb-scan-select-none" type="button">Deselect all matching</button></div>
+            <p id="dvb-scan-selection-count" class="hint">Selection is keyed by SID, including hidden matches. Maximum 1000 selected; 200 results per page.</p>
+            <ul id="dvb-scan-services" class="dvb-scan-services"></ul>
+            <div class="actions"><button id="dvb-scan-prev" type="button">Previous services</button><span id="dvb-scan-page"></span><button id="dvb-scan-next" type="button">Next services</button></div>
+          </fieldset>
+          <fieldset id="dvb-scan-defaults"><legend>3. Import defaults and exact preview</legend>
+            <div class="dvb-editor-fields">
+              <label>Group<select name="import_group_id"><option value="">Ungrouped</option></select></label>
+              <label>Requested adapter<select name="import_adapter_mode"><option value="auto">Auto</option><option value="fixed">Fixed physical card</option></select></label>
+              <label data-import-fixed>Requested physical card<select name="import_device_key"><option value="">Select a card</option></select></label>
+              <label>Name template<input name="import_name_template" value="{name}" /></label>
+              <label>Output protocol<select name="import_protocol"><option value="mpegts">MPEGTS / HTTP</option><option value="hls">HLS / HTTP</option></select></label>
+              <label>Play path template<input name="import_path_template" value="/scan/{sid}" /></label>
+              <label>Softcam<select name="import_softcam_id"><option value="">None</option></select></label>
+              <label>XMLTV channel ID template<input name="import_xmltv_template" /></label>
+            </div>
+            <label class="checkbox-row"><input name="import_enabled" type="checkbox" />Enable imported streams (may tune immediately)</label>
+            <p class="hint">Tokens: {name}, {sid}, {index}. Index is 1-based in the displayed import order. Paths use the global HTTP play port. Names substituted into URLs must be path-safe; use {sid} otherwise. Requested adapter is a preference, not actual placement. One submitted batch per scan prevents repeat imports.</p>
+            <p id="dvb-scan-preview-error" class="notice err" role="alert" hidden></p>
+            <ol id="dvb-scan-preview" aria-label="Import preview"></ol>
+          </fieldset>
+          <section id="dvb-scan-results" aria-label="Per-service import results" hidden><h4>Import results</h4><ul></ul></section>
+        </div>
+        <div class="dialog-actions">
+          <p id="dvb-scan-status" class="notice" role="status" aria-live="polite">Start is explicit; opening this dialog never tunes.</p>
+          <button id="dvb-scan-close" type="button">Close</button>
+          <button id="dvb-scan-retry" type="button" hidden>Retry read</button>
+          <button id="dvb-scan-new" type="button" hidden>New scan</button>
+          <button id="dvb-scan-start" type="submit" disabled>Start scan</button>
+          <button id="dvb-scan-import" type="button" disabled>Import Selected</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="streamDialog" class="app-editor" aria-labelledby="streamDialogTitle">
+      <form id="streamForm" method="dialog" class="form-grid">
+        <header class="editor-header"><h3 id="streamDialogTitle" tabindex="-1" autofocus>Add Stream</h3></header>
+        <div class="editor-body">
+          <input name="id" type="hidden" />
+          <input name="adapter_profile_id" type="hidden" />
+          <fieldset class="form-section"><legend>Input and protocol</legend>
+            <label>
+              Name
+              <input name="name" type="text" required />
+            </label>
+            <label>
+              Input URL
+              <input name="input_url" type="text" required />
+              <small class="hint">External stream URL (HTTP, RTSP, SRT, UDP, etc.). For DVB streams, use DVB Streams.</small>
+            </label>
+            <label>
+              Softcam Profile
+              <select name="softcam_id">
+                <option value="">None</option>
+              </select>
+            </label>
+            <label>
+              Protocol
+              <select name="protocol">
+                <option value="mpegts">mpegts</option>
+                <option value="mpegts-secure">mpegts-secure</option>
+                <option value="hls">hls</option>
+                <option value="hls-secure">hls-secure</option>
+                <option value="udp">udp</option>
+                <option value="srt">srt</option>
+                <option value="http">http</option>
+                <option value="rtsp">rtsp</option>
+                <option value="rtsp-secure">rtsp-secure</option>
+              </select>
+            </label>
+          </fieldset>
+          <div id="streamMpegtsPanel" class="stream-protocol-panel">
+            <label>
+              HTTP Play Path
+              <input name="mpegts_path" type="text" placeholder="/channel1" />
+              <small class="hint">Client playback URL: <code>http://server_ip:HTTP_PLAY_PORT/path</code></small>
+            </label>
+          </div>
+          <div id="streamSrtPanel" class="stream-protocol-panel">
+            <fieldset class="form-section"><legend>SRT connection</legend>
+              <label>
+                SRT Mode
+                <select name="srt_mode">
+                  <option value="listener">listener</option>
+                  <option value="caller">caller</option>
+                </select>
+              </label>
+              <label>
+                SRT Host
+                <input name="srt_host" type="text" placeholder="0.0.0.0" />
+              </label>
+              <label>
+                Per-stream SRT Port (optional)
+                <input name="srt_port_override" type="number" min="1" max="65535" />
+                <small class="hint">Uses global SRT port when empty.</small>
+              </label>
+              <label>
+                Stream ID
+                <input name="srt_streamid" type="text" placeholder="service=channel1" />
+              </label>
+            </fieldset>
+            <fieldset class="form-section"><legend>Encryption</legend>
+              <label>
+                Encryption Passphrase
+                <input name="srt_passphrase" type="password" autocomplete="new-password" />
+              </label>
+              <label>
+                Encryption Key Length
+                <select name="srt_pbkeylen">
+                  <option value="16">16</option>
+                  <option value="24">24</option>
+                  <option value="32">32</option>
+                </select>
+              </label>
+            </fieldset>
+            <fieldset class="form-section"><legend>Latency and FEC</legend>
+              <label>
+                Latency (ms)
+                <input name="srt_latency" type="number" min="20" max="8000" />
+              </label>
+              <label class="checkbox-row">
+                <input name="srt_fec_enabled" type="checkbox" />
+                Enable SRT FEC packetfilter
+              </label>
+              <label>
+                FEC Columns
+                <input name="srt_fec_cols" type="number" min="1" max="64" />
+              </label>
+              <label>
+                FEC Rows
+                <input name="srt_fec_rows" type="number" min="1" max="64" />
+              </label>
+            </fieldset>
+          </div>
+          <div id="streamUdpPanel" class="stream-protocol-panel">
+            <label>
+              UDP Host
+              <input name="udp_host" type="text" placeholder="127.0.0.1" />
+            </label>
+            <label>
+              UDP Port
+              <input name="udp_port" type="number" min="1" max="65535" placeholder="1234" />
+            </label>
+          </div>
+          <label>
+            Output URL
+            <div class="url-copy-row">
+              <input name="output_url" type="text" required readonly />
+              <button type="button" id="copyOutputUrlBtn">Copy</button>
+            </div>
+            <small id="streamOutputHint" class="hint"></small>
+          </label>
+          <fieldset class="form-section"><legend>Playback and EPG</legend>
+            <label class="checkbox-row">
+              <input name="enabled" type="checkbox" checked />
+              Enabled
+            </label>
+            <label class="checkbox-row">
+              <input name="on_demand" type="checkbox" />
+              On Demand
+            </label>
+            <label>
+              On Demand Timeout (sec)
+              <input name="on_demand_timeout_sec" type="number" min="5" max="3600" value="30" />
+              <small class="hint">Stop stream after this many seconds of inactivity.</small>
+            </label>
+            <label>
+              XMLTV Channel ID
+              <input name="xmltv_channel_id" type="text" placeholder="channel1.hd" />
+              <small class="hint">Optional channel identifier for EPG matching. Used when EPG aggregator is enabled.</small>
+            </label>
+          </fieldset>
+        </div>
+        <div class="dialog-actions">
+          <p class="notice" data-editor-notice role="status" aria-live="polite" hidden></p>
+          <button value="cancel" type="button" id="cancelStreamBtn" class="secondary">Cancel</button>
+          <button value="default" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <template id="streamRowTemplate">
+      <tr>
+        <td class="name"></td>
+        <td class="input"></td>
+        <td class="output"></td>
+        <td class="protocol"></td>
+        <td class="softcam"></td>
+        <td class="enabled"></td>
+        <td class="runtime"></td>
+        <td class="bitrate"></td>
+        <td class="packets"></td>
+        <td class="actions">
+          <button data-action="start" class="secondary">Start</button>
+          <button data-action="stop" class="secondary">Stop</button>
+          <button data-action="restart" class="secondary">Restart</button>
+          <button data-action="edit">Edit</button>
+          <button data-action="delete" class="danger">Delete</button>
+        </td>
+      </tr>
+    </template>
+
+    <template id="softcamRowTemplate">
+      <tr>
+        <td class="name"></td>
+        <td class="type"></td>
+        <td class="endpoint"></td>
+        <td class="user"></td>
+        <td class="enabled"></td>
+        <td class="runtime"></td>
+        <td class="latency"></td>
+        <td class="actions">
+          <button data-action="test" class="secondary">Test</button>
+          <button data-action="start" class="secondary">Start</button>
+          <button data-action="stop" class="secondary">Stop</button>
+          <button data-action="restart" class="secondary">Restart</button>
+          <button data-action="edit">Edit</button>
+          <button data-action="delete" class="danger">Delete</button>
+        </td>
+      </tr>
+    </template>
+
+    <dialog id="softcamDialog" class="app-editor" aria-labelledby="softcamDialogTitle">
+      <form id="softcamForm" method="dialog" class="form-grid">
+        <header class="editor-header"><h3 id="softcamDialogTitle" tabindex="-1" autofocus>Add Softcam</h3></header>
+        <div class="editor-body">
+          <input name="id" type="hidden" />
+          <fieldset class="form-section"><legend>Connection</legend>
+            <label>
+              Name
+              <input name="name" type="text" required />
+            </label>
+            <label>
+              Type
+              <select name="type">
+                <option value="newcamd">newcamd</option>
+                <option value="cccam">CCcam (control only)</option>
+              </select>
+              <small class="hint" id="softcamProtocolHint" hidden>CCcam authentication and card discovery are available for supported control modes. Stream descrambling is not implemented.</small>
+            </label>
+            <label>
+              Host
+              <input name="host" type="text" required />
+            </label>
+            <label>
+              Port
+              <input name="port" type="number" min="1" max="65535" required />
+            </label>
+          </fieldset>
+          <fieldset class="form-section"><legend>Credentials</legend>
+            <label>
+              Username
+              <input name="username" type="text" required />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" autocomplete="new-password" />
+              <small class="hint" id="softcamPasswordHint"></small>
+            </label>
+            <label id="softcamDESKeyRow">
+              DES Key (14-byte hex)
+              <input name="des_key" type="text" placeholder="0102030405060708091011121314" />
+            </label>
+          </fieldset>
+          <fieldset class="form-section"><legend>Options</legend>
+            <label>
+              Connect Timeout (sec)
+              <input name="connect_timeout_sec" type="number" min="1" max="120" value="6" required />
+            </label>
+            <label class="checkbox-row">
+              <input name="enabled" type="checkbox" checked />
+              Enabled
+            </label>
+          </fieldset>
+        </div>
+        <div class="dialog-actions">
+          <p class="notice" data-editor-notice role="status" aria-live="polite" hidden></p>
+          <button value="cancel" type="button" id="cancelSoftcamBtn" class="secondary">Cancel</button>
+          <button value="default" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="softcamTestDialog" class="app-editor" aria-labelledby="softcamTestTitle">
+      <div class="test-result">
+        <header class="editor-header"><h3 id="softcamTestTitle" tabindex="-1" autofocus>Testing Softcam Connection</h3></header>
+        <div id="softcamTestResult" class="test-result-content editor-body" role="status" aria-live="polite"></div>
+        <div class="dialog-actions">
+          <button value="default" type="button" id="closeSoftcamTestBtn">Close</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="certGenerateDialog" class="app-editor" aria-labelledby="certGenerateTitle">
+      <form id="certGenerateForm" method="dialog" class="form-grid">
+        <header class="editor-header"><h3 id="certGenerateTitle" tabindex="-1" autofocus>Generate Self-Signed Certificate</h3></header>
+        <div class="editor-body">
+          <label>
+            Common Name (CN)
+            <input name="common_name" type="text" value="AstraX" />
+          </label>
+          <label>
+            Validity (days)
+            <input name="duration_days" type="number" min="1" value="3650" />
+          </label>
+          <label>
+            Hosts
+            <input name="hosts" type="text" value="localhost, 127.0.0.1" />
+            <small class="hint">Comma-separated list of hostnames and IP addresses.</small>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <p id="certGenerateNotice" class="notice" data-editor-notice role="status" aria-live="polite" hidden></p>
+          <button type="button" id="cancelCertGenerateBtn" class="secondary">Cancel</button>
+          <button type="submit">Generate</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="certUploadDialog" class="app-editor" aria-labelledby="certUploadTitle">
+      <form id="certUploadForm" method="dialog" class="form-grid">
+        <header class="editor-header"><h3 id="certUploadTitle" tabindex="-1" autofocus>Upload Certificate</h3></header>
+        <div class="editor-body">
+          <label>
+            Certificate (PEM)
+            <textarea name="cert" rows="8" required placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+          </label>
+          <label>
+            Private Key (PEM)
+            <textarea name="key" rows="8" required placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----"></textarea>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <p id="certUploadNotice" class="notice" data-editor-notice role="status" aria-live="polite" hidden></p>
+          <button value="cancel" type="button" id="cancelCertUploadBtn" class="secondary">Cancel</button>
+          <button value="default" type="submit">Upload</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="apiTokenCreateDialog" class="app-editor api-dialog" aria-labelledby="apiTokenCreateTitle">
+      <form id="apiTokenCreateForm"><header class="editor-header"><h3 id="apiTokenCreateTitle">Create access token</h3></header>
+        <div class="editor-body"><p class="hint">Grant only the permissions this integration needs.</p>
+        <label>Name<input name="name" required maxlength="128" autocomplete="off" autofocus /></label>
+        <fieldset><legend>Scopes (select at least one)</legend>
+          <label class="checkbox-row"><input type="checkbox" name="scope" value="read" />Read - status, streams, inventory and docs</label>
+          <label class="checkbox-row"><input type="checkbox" name="scope" value="streams:control" />Stream control - start, stop and restart</label>
+          <label class="checkbox-row"><input type="checkbox" name="scope" value="admin" />Admin - create, configure and delete</label>
+        </fieldset></div>
+        <div class="dialog-actions"><p id="apiTokenCreateNotice" class="notice" role="status" hidden></p><button id="apiTokenCreateCancel" type="button" class="secondary">Cancel</button><button id="apiTokenCreateSubmit" type="submit">Create token</button></div>
+      </form>
+    </dialog>
+    <dialog id="apiTokenSecretDialog" class="app-editor api-dialog" aria-labelledby="apiTokenSecretTitle">
+      <div class="test-result"><header class="editor-header"><h3 id="apiTokenSecretTitle" tabindex="-1">Copy your token now</h3></header>
+        <div class="editor-body"><p>This token cannot be shown again. Store it securely before closing.</p>
+          <label>One-time token<input id="apiTokenSecret" readonly autocomplete="off" spellcheck="false" /></label>
+        </div>
+        <div class="dialog-actions"><p id="apiTokenCopyNotice" class="notice" role="status" hidden></p><button id="apiTokenSecretClose" type="button" class="secondary">Done</button><button id="apiTokenCopy" type="button">Copy token</button></div>
+      </div>
+    </dialog>
+    <script type="module" src="/app.js?v=38"></script>
+  </body>
+</html>

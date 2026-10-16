@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) Delitants
+/astrax-config*.json
+/.env*
+/*.pem
+/*.key
+/.DS_Store

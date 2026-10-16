@@ -1,0 +1,6062 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AstraX External API",
+    "version": "1.0.0",
+    "description": "External listener contract only. Mandatory named bearer tokens and exact-origin CORS. Use TLS outside protected loopback transport. Public reads omit source/output URLs, stored credentials, process arguments and opaque operation results; diagnostic text is withheld. Management endpoints, token administration, events and web assets are not part of this contract. Select the actual configured external origin in your client, not the management origin. OPTIONS preflight is supported only for registered methods/paths and configured origins; Authorization and Content-Type are allowed, credentials mode is not. No external documentation assets or references are fetched."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Relative to the configured external API origin, not the management listener."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Status"
+    },
+    {
+      "name": "External Streams"
+    },
+    {
+      "name": "DVB Cards"
+    },
+    {
+      "name": "DVB Streams"
+    },
+    {
+      "name": "DVB Groups"
+    },
+    {
+      "name": "EPG"
+    }
+  ],
+  "paths": {
+    "/api/v1/version": {
+      "get": {
+        "operationId": "getVersion",
+        "tags": [
+          "Status"
+        ],
+        "summary": "get Version",
+        "description": "Requires read. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                },
+                "example": {
+                  "name": "AstraX",
+                  "version": "0.1.0-dev"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "operationId": "getStatus",
+        "tags": [
+          "Status"
+        ],
+        "summary": "get Status",
+        "description": "Requires read. No scope implicitly includes another. Counts cover the complete runtime, including configured Softcam counts; no credentials or control endpoint are returned. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logs": {
+      "get": {
+        "operationId": "listLogs",
+        "tags": [
+          "Status"
+        ],
+        "summary": "list Logs",
+        "description": "Requires read. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Logs"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Newest bounded log entries; message text is withheld.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 200
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/streams": {
+      "get": {
+        "operationId": "listStreams",
+        "tags": [
+          "External Streams"
+        ],
+        "summary": "list Streams",
+        "description": "Requires read. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalStreamPage"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "One-based page; digits only, overflow is rejected.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size.",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                50,
+                100,
+                200
+              ],
+              "default": 100
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive public-field search; max 256 decoded bytes. URLs and raw diagnostic text are excluded.",
+            "schema": {
+              "type": "string",
+              "x-max-bytes": 256
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createStream",
+        "tags": [
+          "External Streams"
+        ],
+        "summary": "create Stream",
+        "description": "Requires admin. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputexternalStreamInput"
+              },
+              "example": {
+                "name": "Example network channel",
+                "input_url": "udp://239.0.0.1:1234",
+                "output_url": "/example",
+                "protocol": "mpegts",
+                "enabled": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/streams/{id}": {
+      "get": {
+        "operationId": "getStream",
+        "tags": [
+          "External Streams"
+        ],
+        "summary": "get Stream",
+        "description": "Requires read. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "updateStream",
+        "tags": [
+          "External Streams"
+        ],
+        "summary": "update Stream",
+        "description": "Requires admin. No scope implicitly includes another. Full replacement of writable fields, not a patch; omitted values reset to defaults/zero. Do not round-trip the redacted public response. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputexternalStreamInput"
+              },
+              "example": {
+                "name": "Example network channel",
+                "input_url": "udp://239.0.0.1:1234",
+                "output_url": "/example",
+                "protocol": "mpegts",
+                "enabled": false
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteStream",
+        "tags": [
+          "External Streams"
+        ],
+        "summary": "delete Stream",
+        "description": "Requires admin. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "204": {
+            "description": "Deleted; no response body."
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-cards": {
+      "get": {
+        "operationId": "listDVBCards",
+        "tags": [
+          "DVB Cards"
+        ],
+        "summary": "list DVBCards",
+        "description": "Requires read. No scope implicitly includes another. Inventory facets and summary describe unfiltered inventory; items/total honor filters. Discovery staleness and errors are explicit. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDVBCardPage"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "One-based page; digits only, overflow is rejected.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size.",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                50,
+                100,
+                200
+              ],
+              "default": 100
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "available",
+                "active",
+                "busy_external",
+                "error",
+                "offline",
+                "disabled",
+                "restarting"
+              ],
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "delivery_system",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes. Inventory capability filter only; ATSC and ISDB-T visibility does not imply tuning support.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "dvbs",
+                "dvbs2",
+                "dvbc",
+                "dvbt",
+                "dvbt2",
+                "dvb-s",
+                "dvb-s2",
+                "dvb-c",
+                "dvb-t",
+                "dvb-t2",
+                "atsc",
+                "isdbt",
+                "isdb-t"
+              ],
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes.",
+            "schema": {
+              "type": "string",
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive public-field search; max 256 decoded bytes. URLs and raw diagnostic text are excluded.",
+            "schema": {
+              "type": "string",
+              "x-max-bytes": 256
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "adapter",
+                "frontend",
+                "address",
+                "type",
+                "id",
+                "device_key",
+                "model",
+                "manufacturer",
+                "status",
+                "alias",
+                "updated_at"
+              ],
+              "default": "address",
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc",
+              "x-max-bytes": 1024
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/dvb-cards/refresh": {
+      "post": {
+        "operationId": "refreshDVBCards",
+        "tags": [
+          "DVB Cards"
+        ],
+        "summary": "refresh DVBCards",
+        "description": "Requires admin. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDVBCardSummary"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-cards/{id}": {
+      "get": {
+        "operationId": "getDVBCard",
+        "tags": [
+          "DVB Cards"
+        ],
+        "summary": "get DVBCard",
+        "description": "Requires read. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDVBCard"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "updateDVBCard",
+        "tags": [
+          "DVB Cards"
+        ],
+        "summary": "update DVBCard",
+        "description": "Requires admin. No scope implicitly includes another. Full replacement of writable fields, not a patch; omitted values reset to defaults/zero. Do not round-trip the redacted public response. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDVBCard"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputdvbCardInput"
+              },
+              "example": {
+                "alias": "Example tuner",
+                "enabled": false,
+                "rf_defaults": {
+                  "lof1": 9750,
+                  "lof2": 10600,
+                  "slof": 11700,
+                  "mode": "universal"
+                },
+                "advanced": {
+                  "enable_monitoring": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-cards/{id}/restart": {
+      "post": {
+        "operationId": "restartDVBCard",
+        "tags": [
+          "DVB Cards"
+        ],
+        "summary": "restart DVBCard",
+        "description": "Requires streams:control. No scope implicitly includes another. 202 means accepted, not complete or tuned. Poll the returned URL; an error is not an instruction to repeat a mutation. Poll operation_url; GET /api/v1/dvb-cards/{id}/operations/{operation} returns PublicOperation. queued/running are nonterminal; succeeded/failed/partial are terminal.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "streams:control",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestartAccepted"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Relative polling URL on the same external API origin. GET /api/v1/dvb-cards/{id}/operations/{operation} returns PublicOperation. Also returned in Location.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-cards/{id}/operations/{operation}": {
+      "get": {
+        "operationId": "getDVBCardOperation",
+        "tags": [
+          "DVB Cards"
+        ],
+        "summary": "get DVBCard Operation",
+        "description": "Requires read. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicOperation"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "operation",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/dvb-streams": {
+      "get": {
+        "operationId": "listDVBStreams",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "list DVBStreams",
+        "description": "Requires read. No scope implicitly includes another. Facets follow filters over the complete matching set, not only the current page. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDVBStreamPage"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "One-based page; digits only, overflow is rejected.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size.",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                50,
+                100,
+                200
+              ],
+              "default": 100
+            }
+          },
+          {
+            "name": "group",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes. Omit for all groups; empty or ungrouped selects ungrouped streams. Other IDs are opaque.",
+            "schema": {
+              "type": "string",
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "starting",
+                "tuning",
+                "on-demand",
+                "stopped",
+                "error",
+                "running",
+                "locked"
+              ],
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "requested_adapter",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes. Omit for all requested adapters. Use auto for automatic assignment, the device key for a fixed assignment, or address:<adapter>.<frontend> (for example address:52.0) when the fixed assignment has no device key. A device key takes precedence over a saved address. Use keys from facets.requested_adapters; opaque device keys are matched exactly. The auto value and address: prefix are case-insensitive.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "actual_adapter",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes. Omit for all actual adapters. Use the runtime placement card ID, or unassigned for streams with no actual card ID. Use keys from facets.actual_adapters; card IDs are matched exactly. The unassigned value is case-insensitive; automatic requested assignment does not imply an actual placement.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "delivery_system",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "dvbs",
+                "dvbs2",
+                "dvbc",
+                "dvbt",
+                "dvbt2",
+                "dvb-s",
+                "dvb-s2",
+                "dvb-c",
+                "dvb-t",
+                "dvb-t2"
+              ],
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "protocol",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mpegts",
+                "mpegts-secure",
+                "udp",
+                "srt",
+                "hls",
+                "hls-secure",
+                "http",
+                "rtsp",
+                "rtsp-secure",
+                "dvb"
+              ],
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive public-field search; max 256 decoded bytes. URLs and raw diagnostic text are excluded.",
+            "schema": {
+              "type": "string",
+              "x-max-bytes": 256
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes. Output/output_url sort uses ID ties because URLs are withheld.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "id",
+                "status",
+                "state",
+                "group",
+                "group_id",
+                "service",
+                "service_id",
+                "transponder",
+                "frequency",
+                "frequency_khz",
+                "requested_adapter",
+                "actual_adapter",
+                "output",
+                "output_url",
+                "protocol",
+                "updated",
+                "updated_at",
+                "updated_time",
+                "name"
+              ],
+              "default": "name",
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown or duplicate parameters are rejected. Maximum 1024 decoded UTF-8 bytes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc",
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "descrambling_state",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown, empty or repeated values are rejected. Values are trimmed and matched case-insensitively. Filters compose with existing filters before pagination; no hardware probing or runtime startup. Maximum 1024 decoded UTF-8 bytes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "waiting_psi",
+                "waiting_route",
+                "waiting_keys",
+                "key_expired",
+                "partial_clear",
+                "payload_processed",
+                "unsupported",
+                "capacity",
+                "stopped"
+              ],
+              "x-max-bytes": 1024
+            }
+          },
+          {
+            "name": "descrambling_reason",
+            "in": "query",
+            "required": false,
+            "description": "Single query value; unknown, empty or repeated values are rejected. Values are trimmed and matched case-insensitively. Filters compose with existing filters before pagination; no hardware probing or runtime startup. Maximum 1024 decoded UTF-8 bytes.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stream_stopped",
+                "policy_disabled",
+                "catalog_missing",
+                "catalog_stale",
+                "input_closed",
+                "catalog_unavailable",
+                "no_ca_descriptors",
+                "unsupported_ca_layout",
+                "backend_unavailable",
+                "pipeline_unavailable",
+                "sink_unavailable",
+                "unsupported_descrambling_output",
+                "waiting_keys",
+                "key_expired",
+                "partial_clear",
+                "payload_processed",
+                "capacity",
+                "stale_attachment",
+                "policy_invalid",
+                "profile_unavailable",
+                "cipher_failed"
+              ],
+              "x-max-bytes": 1024
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createDVBStream",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "create DVBStream",
+        "description": "Requires admin. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/UnsupportedDeliverySystem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputdvbStreamInput"
+              },
+              "example": {
+                "name": "Example DVB channel",
+                "output_url": "/example-dvb",
+                "protocol": "mpegts",
+                "enabled": false,
+                "dvb": {
+                  "delivery_system": "dvbs2",
+                  "frequency_khz": 11278000,
+                  "symbol_rate": 27500000,
+                  "polarization": "V",
+                  "modulation": "AUTO",
+                  "fec": "AUTO",
+                  "service_id": 1,
+                  "adapter": {
+                    "mode": "auto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-streams/bulk": {
+      "post": {
+        "operationId": "bulkDVBStreams",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "bulk DVBStreams",
+        "description": "Action-dependent scope: start/stop/restart require streams:control; move_group/assign_adapter/delete require admin. Requires action-dependent. No scope implicitly includes another. Inspect every result and succeeded/failed counts even on HTTP 200; partial failures are not retried automatically. ok:true and succeeded count mean the requested configuration change was persisted; they do not prove runtime activation or running/locked state. Activation can fail after persistence. Read GET /api/v1/dvb-streams or GET /api/v1/dvb-streams/{id} afterward to inspect runtime state.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "action-dependent",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "description": "Request failure, or per-item results plus an operation-level error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BulkError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failure, or per-item results plus an operation-level error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BulkError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "description": "Request failure, or per-item results plus an operation-level error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BulkError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request failure, or per-item results plus an operation-level error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BulkError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicBulkDVBStreamResult"
+                },
+                "example": {
+                  "results": [
+                    {
+                      "id": "stream-1",
+                      "ok": true
+                    },
+                    {
+                      "id": "stream-2",
+                      "ok": false,
+                      "error": "Details withheld; see management UI"
+                    }
+                  ],
+                  "succeeded": 1,
+                  "failed": 1
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputBulkDVBStreamRequest"
+              },
+              "example": {
+                "action": "stop",
+                "ids": [
+                  "stream-1",
+                  "stream-2"
+                ]
+              }
+            }
+          }
+        },
+        "x-action-scopes": {
+          "start": "streams:control",
+          "stop": "streams:control",
+          "restart": "streams:control",
+          "move_group": "admin",
+          "assign_adapter": "admin",
+          "delete": "admin"
+        }
+      }
+    },
+    "/api/v1/dvb-streams/{id}": {
+      "get": {
+        "operationId": "getDVBStream",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "get DVBStream",
+        "description": "Requires read. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "updateDVBStream",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "update DVBStream",
+        "description": "Requires admin. No scope implicitly includes another. Full replacement of writable fields, not a patch; omitted values reset to defaults/zero. Do not round-trip the redacted public response. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/UnsupportedDeliverySystem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputdvbStreamInput"
+              },
+              "example": {
+                "name": "Example DVB channel",
+                "output_url": "/example-dvb",
+                "protocol": "mpegts",
+                "enabled": false,
+                "dvb": {
+                  "delivery_system": "dvbs2",
+                  "frequency_khz": 11278000,
+                  "symbol_rate": 27500000,
+                  "polarization": "V",
+                  "modulation": "AUTO",
+                  "fec": "AUTO",
+                  "service_id": 1,
+                  "adapter": {
+                    "mode": "auto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteDVBStream",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "delete DVBStream",
+        "description": "Requires admin. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "204": {
+            "description": "Deleted; no response body."
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-scans": {
+      "post": {
+        "operationId": "createDVBScan",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "create DVBScan",
+        "description": "Requires admin. No scope implicitly includes another. 202 means accepted, not complete or tuned. Poll the returned URL; an error is not an instruction to repeat a mutation. Poll result_url; GET /api/v1/dvb-scans/{id} returns PublicDVBScanResult, not PublicOperation. queued/running are nonterminal; succeeded/failed/partial are terminal.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanAccepted"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Relative polling URL on the same external API origin. GET /api/v1/dvb-scans/{id} returns PublicDVBScanResult, not PublicOperation. Also returned in Location.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/UnsupportedDeliverySystem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputDVBScanRequest"
+              },
+              "example": {
+                "dvb": {
+                  "delivery_system": "dvbs2",
+                  "frequency_khz": 11278000,
+                  "symbol_rate": 27500000,
+                  "polarization": "V",
+                  "modulation": "AUTO",
+                  "fec": "AUTO",
+                  "service_id": 0,
+                  "adapter": {
+                    "mode": "auto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-scans/{id}": {
+      "get": {
+        "operationId": "getDVBScan",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "get DVBScan",
+        "description": "Requires read. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDVBScanResult"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/dvb-scans/{id}/import": {
+      "post": {
+        "operationId": "importDVBScan",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "import DVBScan",
+        "description": "Requires admin. No scope implicitly includes another. Inspect every result and succeeded/failed counts even on HTTP 200; partial failures are not retried automatically. Only succeeded or partial scans can be imported. Results preserve the order of service_ids in this request. For ok:true, id is the newly created stream ID; for ok:false, id is the decimal requested service ID, not a stream ID. Correlate successful results to services by their request position.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Mixed result example for service_ids [101, 404], in that order. Stream creation succeeded for 101 and failed for 404.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicBulkDVBStreamResult"
+                },
+                "example": {
+                  "results": [
+                    {
+                      "id": "stream-created-101",
+                      "ok": true
+                    },
+                    {
+                      "id": "404",
+                      "ok": false,
+                      "error": "Details withheld; see management UI"
+                    }
+                  ],
+                  "succeeded": 1,
+                  "failed": 1
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputDVBScanImportRequest"
+              },
+              "example": {
+                "service_ids": [
+                  1,
+                  2
+                ],
+                "adapter": {
+                  "mode": "auto"
+                },
+                "output_template": "/scan-{sid}",
+                "protocol": "mpegts",
+                "enabled": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-groups": {
+      "get": {
+        "operationId": "listDVBGroups",
+        "tags": [
+          "DVB Groups"
+        ],
+        "summary": "list DVBGroups",
+        "description": "Requires read. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Groups"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createDVBGroup",
+        "tags": [
+          "DVB Groups"
+        ],
+        "summary": "create DVBGroup",
+        "description": "Requires admin. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDVBGroup"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupInput"
+              },
+              "example": {
+                "name": "Example group"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-groups/reorder": {
+      "post": {
+        "operationId": "reorderDVBGroups",
+        "tags": [
+          "DVB Groups"
+        ],
+        "summary": "reorder DVBGroups",
+        "description": "Requires admin. No scope implicitly includes another. Supply every editable group exactly once, in the desired order. Exclude the synthetic Ungrouped entry (empty ID). Partial lists, duplicate IDs, unknown IDs and Ungrouped are rejected without changing the order. Obtain the current editable group IDs from the groups array returned by GET /api/v1/dvb-groups, not from its counts map.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Groups"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupReorder"
+              },
+              "example": {
+                "ids": [
+                  "group-1",
+                  "group-2"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-groups/{id}": {
+      "put": {
+        "operationId": "updateDVBGroup",
+        "tags": [
+          "DVB Groups"
+        ],
+        "summary": "update DVBGroup",
+        "description": "Requires admin. No scope implicitly includes another. Full replacement of writable fields, not a patch; omitted values reset to defaults/zero. Do not round-trip the redacted public response. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDVBGroup"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Exactly one JSON object, known fields only; maximum 1048576 wire bytes.",
+          "x-max-bytes": 1048576,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupInput"
+              },
+              "example": {
+                "name": "Renamed group"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteDVBGroup",
+        "tags": [
+          "DVB Groups"
+        ],
+        "summary": "delete DVBGroup",
+        "description": "Requires admin. No scope implicitly includes another. Streams are retained and moved to Ungrouped.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "admin",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupDelete"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/epg": {
+      "get": {
+        "operationId": "getEPG",
+        "tags": [
+          "EPG"
+        ],
+        "summary": "get EPG",
+        "description": "Requires read. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "description": "No EPG data, or runtime unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/EPGError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "XMLTV EPG data",
+            "content": {
+              "application/xml": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "<?xml version=\"1.0\"?><tv></tv>"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "operationId": "getOpenAPI",
+        "tags": [
+          "Status"
+        ],
+        "summary": "get Open API",
+        "description": "Requires read. No scope implicitly includes another. This document describes the external listener. An identical static download is also available without bearer auth at the restricted management listener, even when the external listener is disabled. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAPIDocument"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/streams/{id}/start": {
+      "post": {
+        "operationId": "startStream",
+        "tags": [
+          "External Streams"
+        ],
+        "summary": "start Stream",
+        "description": "Requires streams:control. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "streams:control",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/streams/{id}/stop": {
+      "post": {
+        "operationId": "stopStream",
+        "tags": [
+          "External Streams"
+        ],
+        "summary": "stop Stream",
+        "description": "Requires streams:control. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "streams:control",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/streams/{id}/restart": {
+      "post": {
+        "operationId": "restartStream",
+        "tags": [
+          "External Streams"
+        ],
+        "summary": "restart Stream",
+        "description": "Requires streams:control. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "streams:control",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-streams/{id}/start": {
+      "post": {
+        "operationId": "startDVBStream",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "start DVBStream",
+        "description": "Requires streams:control. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "streams:control",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-streams/{id}/stop": {
+      "post": {
+        "operationId": "stopDVBStream",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "stop DVBStream",
+        "description": "Requires streams:control. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "streams:control",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-streams/{id}/restart": {
+      "post": {
+        "operationId": "restartDVBStream",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "restart DVBStream",
+        "description": "Requires streams:control. No scope implicitly includes another. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "streams:control",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStream"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Omit the body, or send an empty JSON object with Content-Type application/json.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dvb-streams/{id}/descrambling": {
+      "get": {
+        "operationId": "getDVBDescramblingStatus",
+        "tags": [
+          "DVB Streams"
+        ],
+        "summary": "Get cached DVB descrambling metadata",
+        "description": "Requires read on both management and external handlers. No scope implicitly includes another; tokens are not resource-scoped. Read-only cached metadata: no detector, tuner opener, ECM submission, network access or pipeline startup. No query parameters are accepted. Unattached candidates are an explicit empty array; identity and policy may be null. No source/output URLs, credentials, raw CA bytes, keys or leases are exposed. External API enabled controls listener binding, not direct in-process handler authorization.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "read",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "408": {
+            "$ref": "#/components/responses/Timeout"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/BodyTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDVBDescramblingStatus"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque UTF-8 ID, escaped exactly once as one URL path segment. Maximum 1024 decoded bytes; dot segments, control characters and malformed escapes are rejected.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "x-max-bytes": 1024
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "AstraX opaque token",
+        "description": "Named ax_ token returned once on creation. Send Authorization: Bearer <token>. Scopes are explicit; see x-required-scope and bulk x-action-scopes."
+      }
+    },
+    "schemas": {
+      "PublicStatus": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "now": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uptime_seconds": {
+            "type": "integer"
+          },
+          "total_streams": {
+            "type": "integer"
+          },
+          "enabled_streams": {
+            "type": "integer"
+          },
+          "running_streams": {
+            "type": "integer"
+          },
+          "total_softcams": {
+            "type": "integer"
+          },
+          "enabled_softcams": {
+            "type": "integer"
+          },
+          "online_softcams": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "started_at",
+          "now",
+          "uptime_seconds",
+          "total_streams",
+          "enabled_streams",
+          "running_streams",
+          "total_softcams",
+          "enabled_softcams",
+          "online_softcams"
+        ]
+      },
+      "PublicLogEntry": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "level": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "timestamp",
+          "level",
+          "message"
+        ]
+      },
+      "PublicStream": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "softcam_id": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/PublicStreamRuntime"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "dvb": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBStreamConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "adapter_profile_id": {
+            "type": "string"
+          },
+          "scrambled": {
+            "type": "boolean"
+          },
+          "caids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            }
+          },
+          "on_demand": {
+            "type": "boolean"
+          },
+          "on_demand_timeout_sec": {
+            "type": "integer"
+          },
+          "xmltv_channel_id": {
+            "type": "string"
+          },
+          "dvb_descrambling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBDescramblingConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "protocol",
+          "enabled",
+          "updated_at",
+          "runtime"
+        ]
+      },
+      "PublicStreamRuntime": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uptime_seconds": {
+            "type": "integer"
+          },
+          "restart_count": {
+            "type": "integer"
+          },
+          "last_error": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "packets": {
+            "type": "integer"
+          },
+          "bitrate_kbps": {
+            "type": "integer"
+          },
+          "signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBSignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "placement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBPlacementRuntime"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "descrambling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBDescramblingRuntime"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "since",
+          "uptime_seconds",
+          "restart_count",
+          "packets",
+          "bitrate_kbps"
+        ]
+      },
+      "PublicDVBSignal": {
+        "type": "object",
+        "properties": {
+          "locked": {
+            "type": "boolean"
+          },
+          "signal_percent": {
+            "type": "integer"
+          },
+          "snr_percent": {
+            "type": "integer"
+          },
+          "ber": {
+            "type": "integer"
+          },
+          "uncorrected_blocks": {
+            "type": "integer"
+          },
+          "status_bits": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "locked",
+          "signal_percent",
+          "snr_percent",
+          "ber",
+          "uncorrected_blocks",
+          "status_bits"
+        ]
+      },
+      "PublicDVBPlacementRuntime": {
+        "type": "object",
+        "properties": {
+          "requested_mode": {
+            "type": "string"
+          },
+          "requested_card_id": {
+            "type": "string"
+          },
+          "actual_card_id": {
+            "type": "string"
+          },
+          "actual_address": {
+            "type": "string"
+          },
+          "tuning_session_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "requested_mode"
+        ]
+      },
+      "PublicDVBStreamConfig": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicService"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivery_system": {
+            "type": "string"
+          },
+          "frequency_khz": {
+            "type": "integer"
+          },
+          "symbol_rate": {
+            "type": "integer"
+          },
+          "polarization": {
+            "type": "string"
+          },
+          "modulation": {
+            "type": "string"
+          },
+          "fec": {
+            "type": "string"
+          },
+          "rolloff": {
+            "type": "string"
+          },
+          "stream_id": {
+            "type": "string"
+          },
+          "service_id": {
+            "type": "integer"
+          },
+          "video_pid": {
+            "type": "integer"
+          },
+          "audio_pids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            }
+          },
+          "pcr_pid": {
+            "type": "integer"
+          },
+          "rf_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicAdapterLNBConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "advanced": {
+            "$ref": "#/components/schemas/PublicAdapterAdvancedConfig"
+          },
+          "adapter": {
+            "$ref": "#/components/schemas/PublicDVBAdapterPolicy"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "delivery_system",
+          "frequency_khz",
+          "service_id",
+          "advanced",
+          "adapter"
+        ]
+      },
+      "PublicService": {
+        "type": "object",
+        "properties": {
+          "sid": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "video_pid": {
+            "type": "integer"
+          },
+          "audio_pid": {
+            "type": "integer"
+          },
+          "pcr_pid": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "scrambled": {
+            "type": "boolean"
+          },
+          "has_epg": {
+            "type": "boolean"
+          },
+          "audio_languages": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "caids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sid",
+          "name",
+          "video_pid",
+          "audio_pid",
+          "pcr_pid",
+          "type"
+        ]
+      },
+      "PublicAdapterLNBConfig": {
+        "type": "object",
+        "properties": {
+          "lof1": {
+            "type": "integer"
+          },
+          "lof2": {
+            "type": "integer"
+          },
+          "slof": {
+            "type": "integer"
+          },
+          "force_tone": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "unicable_slot": {
+            "type": "integer"
+          },
+          "slot_position": {
+            "type": "string"
+          },
+          "slot_frequency": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "lof1",
+          "lof2",
+          "slof",
+          "force_tone",
+          "mode",
+          "unicable_slot",
+          "slot_position",
+          "slot_frequency"
+        ]
+      },
+      "PublicAdapterAdvancedConfig": {
+        "type": "object",
+        "properties": {
+          "enable_monitoring": {
+            "type": "boolean"
+          },
+          "modulation": {
+            "type": "string"
+          },
+          "fec": {
+            "type": "string"
+          },
+          "rolloff": {
+            "type": "string"
+          },
+          "stream_id": {
+            "type": "string"
+          },
+          "timeout_sec": {
+            "type": "integer"
+          },
+          "dvb_api": {
+            "type": "string"
+          },
+          "dvb_api_v3": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "enable_monitoring",
+          "modulation",
+          "fec",
+          "rolloff",
+          "stream_id",
+          "timeout_sec",
+          "dvb_api",
+          "dvb_api_v3"
+        ]
+      },
+      "PublicDVBAdapterPolicy": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "device_key": {
+            "type": "string"
+          },
+          "last_address": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "mode"
+        ]
+      },
+      "PublicDVBCard": {
+        "type": "object",
+        "properties": {
+          "application": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBCardApplication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "device_key": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "adapter": {
+            "type": "integer"
+          },
+          "frontend": {
+            "type": "integer"
+          },
+          "frontend_type": {
+            "type": "string"
+          },
+          "delivery_systems": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "manufacturer": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "sysfs_path": {
+            "type": "string"
+          },
+          "device_path": {
+            "type": "string"
+          },
+          "present": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "owner_pid": {
+            "type": "integer"
+          },
+          "current_transport": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBStreamConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_sessions": {
+            "type": "integer"
+          },
+          "active_streams": {
+            "type": "integer"
+          },
+          "signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBSignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "config": {
+            "$ref": "#/components/schemas/PublicDVBCardConfig"
+          },
+          "warning": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "last_error": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "device_key",
+          "address",
+          "adapter",
+          "frontend",
+          "present",
+          "status",
+          "active_sessions",
+          "active_streams",
+          "config",
+          "updated_at"
+        ]
+      },
+      "PublicDVBCardApplication": {
+        "type": "object",
+        "properties": {
+          "desired_revision": {
+            "type": "integer"
+          },
+          "selection_revision": {
+            "type": "integer"
+          },
+          "applied_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBCardConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "admission_blocked": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "desired_revision",
+          "selection_revision",
+          "state",
+          "admission_blocked"
+        ]
+      },
+      "PublicDVBCardConfig": {
+        "type": "object",
+        "properties": {
+          "device_key": {
+            "type": "string"
+          },
+          "last_address": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "rf_defaults": {
+            "$ref": "#/components/schemas/PublicAdapterLNBConfig"
+          },
+          "advanced": {
+            "$ref": "#/components/schemas/PublicAdapterAdvancedConfig"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "device_key",
+          "enabled",
+          "rf_defaults",
+          "advanced",
+          "updated_at"
+        ]
+      },
+      "PublicDVBCardPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicDVBCard"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PublicDVBCardSummary"
+          },
+          "refreshed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "refresh_error": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "facets": {
+            "$ref": "#/components/schemas/PublicDVBCardFacets"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "total",
+          "summary",
+          "refreshed_at",
+          "refresh_error",
+          "stale",
+          "facets"
+        ]
+      },
+      "PublicDVBCardSummary": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "available": {
+            "type": "integer"
+          },
+          "active": {
+            "type": "integer"
+          },
+          "busy_external": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "integer",
+            "description": "Number of DVB cards with status error in the full inventory, before filtering or pagination; this is a count, not diagnostic text."
+          },
+          "offline": {
+            "type": "integer"
+          },
+          "disabled": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "total",
+          "available",
+          "active",
+          "busy_external",
+          "error",
+          "offline",
+          "disabled"
+        ]
+      },
+      "PublicDVBCardFacets": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "delivery_systems": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "models",
+          "delivery_systems"
+        ]
+      },
+      "PublicDVBStreamPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicStream"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "facets": {
+            "$ref": "#/components/schemas/PublicDVBStreamFacets"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit",
+          "facets"
+        ]
+      },
+      "PublicDVBStreamFacets": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "statuses": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "requested_adapters": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "actual_adapters": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "delivery_systems": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "protocols": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "integer"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "PublicDVBGroup": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sort_order": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "sort_order",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "PublicBulkDVBStreamResult": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicBulkDVBStreamItemResult"
+            }
+          },
+          "succeeded": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "results",
+          "succeeded",
+          "failed"
+        ]
+      },
+      "PublicBulkDVBStreamItemResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "ok"
+        ]
+      },
+      "PublicOperation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "partial"
+            ],
+            "description": "queued and running are nonterminal: continue polling. succeeded, failed and partial are terminal: stop polling; partial means only some work succeeded. A partial scan can be imported for its discovered services. Terminal status is not a command to repeat the mutation."
+          },
+          "progress": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "error": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "stream_results": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicBulkDVBStreamItemResult"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "PublicDVBScanResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "partial"
+            ],
+            "description": "queued and running are nonterminal: continue polling. succeeded, failed and partial are terminal: stop polling; partial means only some work succeeded. A partial scan can be imported for its discovered services. Terminal status is not a command to repeat the mutation."
+          },
+          "request": {
+            "$ref": "#/components/schemas/PublicDVBScanRequest"
+          },
+          "card_id": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBSignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "services": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicService"
+            }
+          },
+          "error": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "request",
+          "started_at"
+        ]
+      },
+      "PublicDVBScanRequest": {
+        "type": "object",
+        "properties": {
+          "dvb": {
+            "$ref": "#/components/schemas/PublicDVBStreamConfig"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "dvb"
+        ]
+      },
+      "InputexternalStreamInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "input_url": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Network input: udp, rtp, http, https, srt, rtsp or rtsps. May contain credentials; omitted from all public read views."
+          },
+          "output_url": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Full protocol-specific output or playback path. Required on create and full PUT; omitted from public responses."
+          },
+          "protocol": {
+            "type": "string",
+            "description": "Protocol token (for example mpegts, hls, udp, srt); compatibility and output validation occur in the stream engine."
+          },
+          "softcam_id": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "on_demand": {
+            "type": "boolean"
+          },
+          "on_demand_timeout_sec": {
+            "type": "integer"
+          },
+          "xmltv_channel_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "input_url",
+          "output_url"
+        ]
+      },
+      "InputdvbStreamInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "output_url": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Full protocol-specific output or playback path. Required on create and full PUT; omitted from public responses."
+          },
+          "protocol": {
+            "type": "string",
+            "description": "Protocol token (for example mpegts, hls, udp, srt); compatibility and output validation occur in the stream engine."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "softcam_id": {
+            "type": "string"
+          },
+          "dvb": {
+            "$ref": "#/components/schemas/InputDVBStreamConfig"
+          },
+          "dvb_descrambling": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Optional descrambling policy. Omitted or null means disabled. Disabled policies may be incomplete. The sole profile reference is top-level softcam_id; nested profile or credential fields are rejected. Enabling requires a complete policy, the referenced enabled native CCcam/Newcamd profile and an available CSA backend. Backend-unavailable builds reject enable; a saved policy is not proof of runtime descrambling.",
+            "properties": {
+              "enabled": {
+                "type": [
+                  "boolean",
+                  "null"
+                ],
+                "default": false,
+                "description": "Absent or null is false; no automatic enable."
+              },
+              "algorithm": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Enabling requires exactly dvb-csa after trimming. Disabled policies may omit this value or retain an incomplete or unsupported algorithm."
+              },
+              "caid": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Nonempty trimmed values must contain exactly four hexadecimal digits and are saved uppercase. Empty, null or omitted is allowed while disabled; enabling requires a value."
+              },
+              "provider": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Nonempty trimmed values must contain exactly six hexadecimal digits and are saved uppercase, including explicit 000000. Empty, null or omitted is allowed while disabled; enabling requires an explicit value."
+              },
+              "ecm_pid": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Optional override; omitted or null is no override, distinct from PID zero. Enabled policies require 1..8190 when supplied. Disabled policies may retain any integer; the enabled range is not applied while disabled."
+              }
+            },
+            "additionalProperties": false
+          },
+          "scrambled": {
+            "type": "boolean"
+          },
+          "caids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            }
+          },
+          "on_demand": {
+            "type": "boolean"
+          },
+          "on_demand_timeout_sec": {
+            "type": "integer"
+          },
+          "xmltv_channel_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "output_url",
+          "dvb"
+        ]
+      },
+      "InputDVBStreamConfig": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InputService"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivery_system": {
+            "type": "string"
+          },
+          "frequency_khz": {
+            "type": "integer"
+          },
+          "symbol_rate": {
+            "type": "integer"
+          },
+          "polarization": {
+            "type": "string"
+          },
+          "modulation": {
+            "type": "string"
+          },
+          "fec": {
+            "type": "string"
+          },
+          "rolloff": {
+            "type": "string"
+          },
+          "stream_id": {
+            "type": "string"
+          },
+          "service_id": {
+            "type": "integer"
+          },
+          "video_pid": {
+            "type": "integer"
+          },
+          "audio_pids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            }
+          },
+          "pcr_pid": {
+            "type": "integer"
+          },
+          "rf_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InputAdapterLNBConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "advanced": {
+            "$ref": "#/components/schemas/InputAdapterAdvancedConfig"
+          },
+          "adapter": {
+            "$ref": "#/components/schemas/InputDVBAdapterPolicy"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Canonical delivery tokens dvbs/dvbs2/dvbc/dvbt/dvbt2 (single-hyphen DVB aliases accepted). Frequency in kHz, symbol rate in symbols/s; satellite requires symbol rate and H/V polarization (horizontal/vertical aliases accepted, trimmed and case-insensitive). Stream service_id 1..65535; scans may use 0. Backend capability checks still apply.",
+        "if": {
+          "required": [
+            "delivery_system"
+          ],
+          "properties": {
+            "delivery_system": {
+              "type": "string",
+              "pattern": "^\\s*[dD][vV][bB]-?[sS]2?\\s*$"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "polarization"
+          ],
+          "properties": {
+            "polarization": {
+              "type": "string",
+              "pattern": "^\\s*([Hh]|[Vv]|[Hh][Oo][Rr][Ii][Zz][Oo][Nn][Tt][Aa][Ll]|[Vv][Ee][Rr][Tt][Ii][Cc][Aa][Ll])\\s*$"
+            }
+          }
+        }
+      },
+      "InputService": {
+        "type": "object",
+        "properties": {
+          "sid": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "video_pid": {
+            "type": "integer"
+          },
+          "audio_pid": {
+            "type": "integer"
+          },
+          "pcr_pid": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "scrambled": {
+            "type": "boolean"
+          },
+          "has_epg": {
+            "type": "boolean"
+          },
+          "audio_languages": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "caids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "InputAdapterLNBConfig": {
+        "type": "object",
+        "properties": {
+          "lof1": {
+            "type": "integer"
+          },
+          "lof2": {
+            "type": "integer"
+          },
+          "slof": {
+            "type": "integer"
+          },
+          "force_tone": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "unicable_slot": {
+            "type": "integer"
+          },
+          "slot_position": {
+            "type": "string"
+          },
+          "slot_frequency": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "description": "LOF1/LOF2/SLOF and slot_frequency are MHz. Modes include universal, unicable1 and unicable2. Unicable slots are one-based. RF values are normalized/validated by the backend."
+      },
+      "InputAdapterAdvancedConfig": {
+        "type": "object",
+        "properties": {
+          "enable_monitoring": {
+            "type": "boolean"
+          },
+          "modulation": {
+            "type": "string"
+          },
+          "fec": {
+            "type": "string"
+          },
+          "rolloff": {
+            "type": "string"
+          },
+          "stream_id": {
+            "type": "string"
+          },
+          "timeout_sec": {
+            "type": "integer"
+          },
+          "dvb_api": {
+            "type": "string"
+          },
+          "dvb_api_v3": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "InputDVBAdapterPolicy": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "fixed"
+            ]
+          },
+          "device_key": {
+            "type": "string"
+          },
+          "last_address": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Auto or fixed assignment. Fixed requires device_key or last_address. Auto must not use fallback last_address 0.0."
+      },
+      "InputdvbCardInput": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "rf_defaults": {
+            "$ref": "#/components/schemas/InputAdapterLNBConfig"
+          },
+          "advanced": {
+            "$ref": "#/components/schemas/InputAdapterAdvancedConfig"
+          }
+        },
+        "additionalProperties": false
+      },
+      "InputBulkDVBStreamRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "start",
+              "stop",
+              "restart",
+              "move_group",
+              "assign_adapter",
+              "delete"
+            ]
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "adapter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InputDVBAdapterPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "ids"
+        ],
+        "if": {
+          "properties": {
+            "action": {
+              "const": "assign_adapter"
+            }
+          },
+          "required": [
+            "action"
+          ]
+        },
+        "then": {
+          "required": [
+            "adapter"
+          ],
+          "properties": {
+            "adapter": {
+              "type": "object",
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "auto",
+                    "fixed"
+                  ]
+                }
+              },
+              "if": {
+                "properties": {
+                  "mode": {
+                    "const": "fixed"
+                  }
+                },
+                "required": [
+                  "mode"
+                ]
+              },
+              "then": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "device_key"
+                    ],
+                    "properties": {
+                      "device_key": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "last_address"
+                    ],
+                    "properties": {
+                      "last_address": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "InputDVBScanRequest": {
+        "type": "object",
+        "properties": {
+          "dvb": {
+            "$ref": "#/components/schemas/InputDVBStreamConfig"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "dvb"
+        ]
+      },
+      "InputDVBScanImportRequest": {
+        "type": "object",
+        "properties": {
+          "service_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "adapter": {
+            "$ref": "#/components/schemas/InputDVBAdapterPolicy"
+          },
+          "name_template": {
+            "type": "string"
+          },
+          "output_template": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Required template; supports {sid}, {name}, {provider}, {index} (one-based selected-request order). Literal output paths also accepted. Credential-bearing template is write-only."
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "softcam_id": {
+            "type": "string"
+          },
+          "xmltv_channel_id_template": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "service_ids",
+          "output_template"
+        ]
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ]
+      },
+      "EPGError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ]
+      },
+      "BulkError": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicBulkDVBStreamItemResult"
+            }
+          },
+          "succeeded": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "results",
+          "succeeded",
+          "failed",
+          "error"
+        ]
+      },
+      "Version": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "ExternalStreamPage": {
+        "type": "object",
+        "properties": {
+          "streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicStream"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "streams",
+          "total",
+          "page",
+          "limit"
+        ]
+      },
+      "Logs": {
+        "type": "object",
+        "properties": {
+          "logs": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicLogEntry"
+            }
+          },
+          "messages_redacted": {
+            "const": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "logs",
+          "messages_redacted"
+        ]
+      },
+      "Groups": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicDVBGroup"
+            }
+          },
+          "counts": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "integer"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "groups",
+          "counts"
+        ]
+      },
+      "GroupInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
+      },
+      "GroupReorder": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "description": "Include every editable group exactly once, in the desired order. Exclude the synthetic Ungrouped entry (empty ID); partial lists, duplicate IDs and unknown IDs are rejected.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ids"
+        ]
+      },
+      "GroupDelete": {
+        "type": "object",
+        "properties": {
+          "moved_streams": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "moved_streams"
+        ]
+      },
+      "OpenAPIDocument": {
+        "type": "object",
+        "required": [
+          "openapi",
+          "info",
+          "paths",
+          "components"
+        ],
+        "properties": {
+          "openapi": {
+            "const": "3.1.0"
+          },
+          "info": {
+            "type": "object"
+          },
+          "paths": {
+            "type": "object"
+          },
+          "components": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": true
+      },
+      "RestartAccepted": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "partial"
+            ],
+            "description": "queued and running are nonterminal: continue polling. succeeded, failed and partial are terminal: stop polling; partial means only some work succeeded. A partial scan can be imported for its discovered services. Terminal status is not a command to repeat the mutation."
+          },
+          "progress": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "error": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "stream_results": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicBulkDVBStreamItemResult"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operation_url": {
+            "type": "string",
+            "description": "Relative polling URL on the same external API origin. GET /api/v1/dvb-cards/{id}/operations/{operation} returns PublicOperation. Also returned in Location."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "created_at",
+          "updated_at",
+          "operation_url"
+        ]
+      },
+      "ScanAccepted": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "partial"
+            ],
+            "description": "queued and running are nonterminal: continue polling. succeeded, failed and partial are terminal: stop polling; partial means only some work succeeded. A partial scan can be imported for its discovered services. Terminal status is not a command to repeat the mutation."
+          },
+          "progress": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "error": {
+            "type": "string",
+            "description": "Nonempty diagnostic text is withheld; use the management UI for details."
+          },
+          "stream_results": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicBulkDVBStreamItemResult"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_url": {
+            "type": "string",
+            "description": "Relative polling URL on the same external API origin. GET /api/v1/dvb-scans/{id} returns PublicDVBScanResult, not PublicOperation. Also returned in Location."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "created_at",
+          "updated_at",
+          "result_url"
+        ]
+      },
+      "PublicDVBDescramblingBackend": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "",
+              "backend_unavailable",
+              "unsupported_abi"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "available",
+          "reason"
+        ]
+      },
+      "PublicDVBDescramblingIdentity": {
+        "type": "object",
+        "properties": {
+          "input_id": {
+            "type": "string"
+          },
+          "input_generation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "onid": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "tsid": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "service_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "input_id",
+          "input_generation",
+          "onid",
+          "tsid",
+          "service_id"
+        ]
+      },
+      "PublicDVBDescramblingCandidate": {
+        "type": "object",
+        "properties": {
+          "caid": {
+            "type": "string",
+            "pattern": "^[0-9A-F]{4}$"
+          },
+          "ecm_pid": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8191
+          },
+          "program_level": {
+            "type": "boolean"
+          },
+          "es_pids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 8191
+            },
+            "maxItems": 64
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "caid",
+          "ecm_pid",
+          "program_level",
+          "es_pids"
+        ]
+      },
+      "PublicDVBDescramblingConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "algorithm": {
+            "type": "string"
+          },
+          "caid": {
+            "type": "string",
+            "pattern": "^(?:[0-9A-F]{4})?$"
+          },
+          "provider": {
+            "type": "string",
+            "pattern": "^(?:[0-9A-F]{6})?$"
+          },
+          "ecm_pid": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "algorithm",
+          "caid",
+          "provider"
+        ],
+        "description": "Owned normalized saved policy, not proof of runtime descrambling. Disabled policies may be incomplete or retain an unsupported algorithm or ECM PID. The profile reference remains on the stream; no credentials or keys are included."
+      },
+      "PublicDVBDescramblingMetrics": {
+        "type": "object",
+        "properties": {
+          "queued": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "output_queued": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "processed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "dropped": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sample_stale": {
+            "type": "boolean"
+          },
+          "sample_age_ms": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "queued",
+          "output_queued",
+          "processed",
+          "dropped",
+          "sample_stale",
+          "sample_age_ms"
+        ]
+      },
+      "PublicDVBDescramblingRuntime": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting_psi",
+              "waiting_route",
+              "waiting_keys",
+              "key_expired",
+              "partial_clear",
+              "payload_processed",
+              "unsupported",
+              "capacity",
+              "stopped"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "stream_stopped",
+              "policy_disabled",
+              "catalog_missing",
+              "catalog_stale",
+              "input_closed",
+              "catalog_unavailable",
+              "no_ca_descriptors",
+              "unsupported_ca_layout",
+              "backend_unavailable",
+              "pipeline_unavailable",
+              "sink_unavailable",
+              "unsupported_descrambling_output",
+              "waiting_keys",
+              "key_expired",
+              "partial_clear",
+              "payload_processed",
+              "capacity",
+              "stale_attachment",
+              "policy_invalid",
+              "profile_unavailable",
+              "cipher_failed"
+            ]
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/PublicDVBDescramblingMetrics"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "reason",
+          "metrics"
+        ]
+      },
+      "PublicDVBDescramblingStatus": {
+        "type": "object",
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/PublicDVBDescramblingBackend"
+          },
+          "identity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBDescramblingIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDVBDescramblingCandidate"
+            },
+            "maxItems": 16
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicDVBDescramblingConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting_psi",
+              "waiting_route",
+              "waiting_keys",
+              "key_expired",
+              "partial_clear",
+              "payload_processed",
+              "unsupported",
+              "capacity",
+              "stopped"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "stream_stopped",
+              "policy_disabled",
+              "catalog_missing",
+              "catalog_stale",
+              "input_closed",
+              "catalog_unavailable",
+              "no_ca_descriptors",
+              "unsupported_ca_layout",
+              "backend_unavailable",
+              "pipeline_unavailable",
+              "sink_unavailable",
+              "unsupported_descrambling_output",
+              "waiting_keys",
+              "key_expired",
+              "partial_clear",
+              "payload_processed",
+              "capacity",
+              "stale_attachment",
+              "policy_invalid",
+              "profile_unavailable",
+              "cipher_failed"
+            ]
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/PublicDVBDescramblingMetrics"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "backend",
+          "identity",
+          "candidates",
+          "policy",
+          "state",
+          "reason",
+          "metrics"
+        ]
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "400: BadRequest",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "401: Missing, invalid or revoked token.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bearer authentication challenge."
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "403: Insufficient scope or disallowed origin.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "404: NotFound",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "code": "not_found",
+                "message": "DVB resource not found"
+              }
+            }
+          }
+        }
+      },
+      "MethodNotAllowed": {
+        "description": "405: MethodNotAllowed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "headers": {
+          "Allow": {
+            "schema": {
+              "type": "string"
+            },
+            "description": "Supported methods for this path."
+          }
+        }
+      },
+      "Timeout": {
+        "description": "408: Timeout",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "409: Busy resource, conflicting configuration or superseded operation.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "BodyTooLarge": {
+        "description": "413: BodyTooLarge",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "UnsupportedMediaType": {
+        "description": "415: UnsupportedMediaType",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "500: InternalError",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unavailable": {
+        "description": "503: Store/runtime is unavailable.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "UnsupportedDeliverySystem": {
+        "description": "Unsupported delivery_system; error.code is unsupported_delivery_system and error.field is dvb.delivery_system.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "code": "unsupported_delivery_system",
+                "message": "Unsupported delivery system",
+                "field": "dvb.delivery_system"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
