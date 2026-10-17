@@ -1,0 +1,16 @@
+[Unit]
+Description=AstraX streaming server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=astrax
+Group=astrax
+WorkingDirectory=/var/lib/astrax
+ExecStart=/opt/astrax/astrax --config /var/lib/astrax/astrax-config.json
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

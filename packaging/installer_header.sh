@@ -4,6 +4,9 @@ set -eu
 ASTRAX_PAYLOAD_SHA256='@PAYLOAD_SHA@'
 ASTRAX_EXPECTED_MEMBERS='@MEMBERS@'
 ASTRAX_CORE='@CORE@'
+ASTRAX_SYSTEMD_TEMPLATE='@SYSTEMD@'
+ASTRAX_OPENRC_TEMPLATE='@OPENRC@'
+ASTRAX_SYSV_TEMPLATE='@SYSV@'
 
 payload_offset() {
     awk '/^__ASTRAX_PAYLOAD_BELOW__$/ { print NR + 1; found = 1; exit } END { if (!found) exit 1 }' "$0"
@@ -62,7 +65,11 @@ case $mode in
         [ -n "$ASTRAX_CORE" ] || { echo 'installer core unavailable' >&2; exit 1; }
         extract_payload "$work/payload.tar.gz" "$work/release"
         printf '%s\n' "$ASTRAX_CORE" > "$work/installer_core.sh"
-        sh "$work/installer_core.sh" "$mode" "$work/release"
+        mkdir -m 700 "$work/init"
+        printf '%s\n' "$ASTRAX_SYSTEMD_TEMPLATE" > "$work/init/systemd.in"
+        printf '%s\n' "$ASTRAX_OPENRC_TEMPLATE" > "$work/init/openrc.in"
+        printf '%s\n' "$ASTRAX_SYSV_TEMPLATE" > "$work/init/sysv.in"
+        ASTRAX_TEMPLATE_DIR="$work/init" sh "$work/installer_core.sh" "$mode" "$work/release"
         exit $? ;;
 esac
 

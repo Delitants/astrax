@@ -15,3 +15,9 @@ which breaks this executable's `$ORIGIN/lib` lookup.
 The current Stage C draft is intentionally held and cannot be packaged for
 distribution. The build command and operator instructions will be completed
 with the installer implementation; no host installation is authorized here.
+
+On a supported host, `--install` creates a dedicated service account, places
+the executable and its SRT library under `/opt/astrax/`, reserves
+`/var/lib/astrax/` for the GUI-managed configuration, and writes one startup
+definition for the detected init system. It neither enables nor starts the
+service, and it refuses an existing installation instead of replacing it.

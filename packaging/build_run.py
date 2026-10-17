@@ -144,10 +144,16 @@ def build_run(release_dir: Path, output: Path) -> Path:
     header = Path(__file__).with_name("installer_header.sh").read_text()
     core_path = Path(__file__).with_name("installer_core.sh")
     core = core_path.read_text() if core_path.exists() else ""
+    templates = {}
+    for init in ("systemd", "openrc", "sysv"):
+        template_path = Path(__file__).with_name("init") / f"{init}.in"
+        templates[init] = template_path.read_text() if template_path.exists() else ""
     with tempfile.TemporaryDirectory(dir=output.parent) as scratch:
         payload = build_payload(release_dir, Path(scratch) / "payload.tar.gz")
         digest = _hash_file(payload)
         header = header.replace("@PAYLOAD_SHA@", digest).replace("@MEMBERS@", "\n".join(members))
+        for init, contents in templates.items():
+            header = header.replace(f"@{init.upper()}@", contents.replace("'", "'\"'\"'"))
         header = header.replace("@CORE@", core.replace("'", "'\"'\"'"))
         fd, staged = tempfile.mkstemp(prefix=f".{output.name}.", dir=output.parent)
         try:
