@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!-- Copyright (C) Delitants -->
 
-# Installer source and release hold
+# Installer source and release scope
 
 The planned first binary target is Ubuntu 24.04 amd64 with systemd. This is
 a target scope, not a readiness claim: the exact systemd unit passed static
@@ -11,8 +11,10 @@ OpenRC installation used only a synthetic init marker. Neither OpenRC nor
 SysV is a qualified first-release target. The installer source retains both
 templates for future validation; the public builder pins Ubuntu 24.04/systemd
 and the distributable `.run` rejects other targets at install and activation.
-Do not advertise OpenRC or SysV as supported yet.
-No binary publication or production deployment is authorized by this scope.
+Do not advertise OpenRC or SysV as supported yet. The owner approved
+publication of the exact frozen Ubuntu 24.04 amd64 binary candidate after
+one isolated installer QA. This is not approval for production deployment,
+live DVB/softcam use, or service activation on an operating host.
 
 The self-extracting `.run` includes shell code from `installer_header.sh`,
 `installer_core.sh`, and `init/*.in`. A binary release must ship the exact
@@ -40,9 +42,10 @@ python3 -B share/build/recipient_build.py share/source \
 
 The output directory must not exist and remains private to the invoking
 user. A rebuild need not match the frozen ELF byte for byte; compare its
-source, build metadata, ABI, and behavior instead. The recipient mode has
-source-only tests, not a native recipient-build acceptance run. Do not
-relabel or modify a held layout in place to imply distribution readiness.
+source, build metadata, ABI, and behavior instead. The recipient mode passed
+one isolated, non-serving native Linux amd64 build; its output hashes differ
+from the frozen candidate. Do not relabel or modify a held layout in place to
+imply distribution readiness.
 
 `build_run.py` refuses a distributable package unless `candidate_qualified`,
 `distribution_cleared`, and `publication_cleared` are all true and

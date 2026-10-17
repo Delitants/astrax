@@ -6,11 +6,14 @@ The project-owned files are licensed under GPL-3.0-or-later as described in [LIC
 
 The source passed isolated QA at the identified development commit; that does not establish live DVB/softcam acceptance, production readiness, or a supported installer. Do not run against production hardware without your own validation.
 
-## Planned Linux installer scope
+## Linux installer scope
 
-The first `.run` release is planned for Ubuntu 24.04 amd64 with systemd only.
-No public binary installer has been released or approved for publication.
+The first `.run` release targets Ubuntu 24.04 amd64 with systemd only. Its
+binary publication is approved separately from installation or production
+activation. See the release asset and its SHA-256 on the GitHub Releases page
+when available; this source snapshot alone is not the corresponding-source
+package for the frozen executable. The installer payload includes that source.
 OpenRC and SysV templates remain in the source, but their boot and service
 lifecycles are not qualified as supported release targets. The exact systemd
 unit passed static verification; manager-driven lifecycle acceptance remains
-pending. See [installer source and release hold](packaging/RELEASE-SOURCE.md).
+pending. See [installer source and release scope](packaging/RELEASE-SOURCE.md).
