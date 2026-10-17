@@ -220,3 +220,55 @@ class InstallerCoreTests(unittest.TestCase):
         self.assertFalse((self.root / "opt/astrax").exists())
         self.assertFalse((self.root / "var/lib/astrax").exists())
         self.assertFalse((self.root / "etc/systemd/system/astrax.service").exists())
+
+    def test_explicit_activation_for_each_init(self):
+        import shutil
+        for init, service in (
+            ("systemd", "etc/systemd/system/astrax.service"),
+            ("openrc", "etc/init.d/astrax"),
+            ("sysv", "etc/init.d/astrax"),
+        ):
+            with self.subTest(init=init):
+                self.configure_init(init)
+                self.assertEqual(self.run_core("astrax_install").returncode, 0)
+                self.assertFalse((self.root / "qa/service-enabled").exists())
+                result = self.run_core("astrax_activate")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual((self.root / "qa/service-actions").read_text().splitlines(), ["enable", "start"])
+                self.assertTrue((self.root / "qa/service-enabled").exists())
+                (self.root / "qa/service-actions").unlink()
+                (self.root / "qa/service-enabled").unlink()
+                (self.root / service).unlink()
+                shutil.rmtree(self.root / "opt/astrax")
+                shutil.rmtree(self.root / "var/lib/astrax")
+                (self.root / "qa/account").unlink(missing_ok=True)
+
+    def test_activation_refuses_modified_executable(self):
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        (self.root / "opt/astrax/astrax").write_bytes(b"modified")
+        result = self.run_core("astrax_activate")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "qa/service-actions").exists())
+
+    def test_failed_start_undoes_new_enablement(self):
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        result = self.run_core("astrax_activate", extra_env={"ASTRAX_TEST_FAIL_START": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.root / "qa/service-actions").read_text().splitlines(), ["enable", "start", "disable"])
+        self.assertFalse((self.root / "qa/service-enabled").exists())
+
+    def test_failed_enable_never_starts_service(self):
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        result = self.run_core("astrax_activate", extra_env={"ASTRAX_TEST_FAIL_ENABLE": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "qa/service-actions").exists())
+
+    def test_repeated_activation_does_not_reenable(self):
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        self.assertEqual(self.run_core("astrax_activate").returncode, 0)
+        self.assertEqual(self.run_core("astrax_activate").returncode, 0)
+        self.assertEqual((self.root / "qa/service-actions").read_text().splitlines(), ["enable", "start", "start"])

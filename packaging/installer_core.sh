@@ -160,12 +160,107 @@ astrax_install() {
     echo "AstraX installed; $astrax_init service created but not enabled or started"
 }
 
+astrax_service_enabled() {
+    root=$1
+    init=$2
+    if [ "$root" != / ]; then [ -f "$root/qa/service-enabled" ]; return; fi
+    case "$init" in
+        systemd) systemctl is-enabled --quiet astrax.service ;;
+        openrc) rc-update show default | grep -Eq '(^|[[:space:]])astrax([[:space:]]|$)' ;;
+        sysv) ls /etc/rc[2-5].d/S*astrax >/dev/null 2>&1 ;;
+    esac
+}
+
+astrax_enable_service() {
+    root=$1
+    init=$2
+    if [ "$root" != / ]; then
+        [ "${ASTRAX_TEST_FAIL_ENABLE:-}" != 1 ] || return 1
+        printf 'enable\n' >> "$root/qa/service-actions"
+        : > "$root/qa/service-enabled"
+        return 0
+    fi
+    case "$init" in
+        systemd) systemctl enable astrax.service ;;
+        openrc) rc-update add astrax default ;;
+        sysv) update-rc.d astrax defaults ;;
+    esac
+}
+
+astrax_start_service() {
+    root=$1
+    init=$2
+    if [ "$root" != / ]; then
+        printf 'start\n' >> "$root/qa/service-actions"
+        [ "${ASTRAX_TEST_FAIL_START:-}" != 1 ]
+        return $?
+    fi
+    case "$init" in
+        systemd) systemctl start astrax.service ;;
+        openrc) rc-service astrax start ;;
+        sysv) /etc/init.d/astrax start ;;
+    esac
+}
+
+astrax_disable_service() {
+    root=$1
+    init=$2
+    if [ "$root" != / ]; then
+        printf 'disable\n' >> "$root/qa/service-actions"
+        rm -f "$root/qa/service-enabled"
+        return 0
+    fi
+    case "$init" in
+        systemd) systemctl disable astrax.service ;;
+        openrc) rc-update del astrax default ;;
+        sysv) update-rc.d astrax remove ;;
+    esac
+}
+
+astrax_activate() {
+    root=$1
+    payload=$2
+    [ "$root" != / ] || [ "$(id -u)" -eq 0 ] || { echo 'root required' >&2; return 1; }
+    astrax_check_abi "$root" || return 1
+    init=$(astrax_detect_init "$root") || return 1
+    service=$(astrax_service_path "$root" "$init")
+    template_dir=${ASTRAX_TEMPLATE_DIR:-}
+    [ -f "$template_dir/$init.in" ] && [ -f "$service" ] || { echo 'service definition missing' >&2; return 1; }
+    for name in astrax MANIFEST.json lib/libastrax_srt.so.1.4.0; do
+        cmp -s "$root/opt/astrax/$name" "$payload/$name" || {
+            echo "installed $name does not match this package" >&2
+            return 1
+        }
+    done
+    [ "$(readlink "$root/opt/astrax/lib/libastrax_srt.so.1" 2>/dev/null)" = libastrax_srt.so.1.4.0 ] || {
+        echo 'installed SRT SONAME link mismatch' >&2; return 1
+    }
+    cmp -s "$service" "$template_dir/$init.in" || { echo 'service definition mismatch' >&2; return 1; }
+    [ -d "$root/var/lib/astrax" ] || { echo 'state directory missing' >&2; return 1; }
+    echo "Activating AstraX via $init: $service"
+    newly_enabled=0
+    if ! astrax_service_enabled "$root" "$init"; then
+        if ! astrax_enable_service "$root" "$init"; then
+            if astrax_service_enabled "$root" "$init"; then astrax_disable_service "$root" "$init"; fi
+            echo 'could not enable AstraX service' >&2
+            return 1
+        fi
+        newly_enabled=1
+    fi
+    if ! astrax_start_service "$root" "$init"; then
+        if [ "$newly_enabled" -eq 1 ]; then astrax_disable_service "$root" "$init"; fi
+        echo 'AstraX service failed to start' >&2
+        return 1
+    fi
+    echo 'AstraX service enabled and started'
+}
+
 if [ "${ASTRAX_CORE_LIBRARY_ONLY:-}" = 1 ]; then
     return 0
 fi
 
 case ${1-} in
     --install) [ "$#" -eq 2 ] || exit 2; astrax_install / "$2" ;;
-    --activate) echo 'activation not implemented' >&2; exit 1 ;;
+    --activate) [ "$#" -eq 2 ] || exit 2; astrax_activate / "$2" ;;
     *) echo 'invalid installer core command' >&2; exit 2 ;;
 esac
