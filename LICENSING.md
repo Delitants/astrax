@@ -39,6 +39,9 @@ tracked under `packaging/` at commit
 templates, and the two `tests/test_*.py` files. Each has an explicit SPDX
 and copyright notice in this source snapshot. This grant does not cover
 future files merely because they are added under `packaging/`.
+The project-authored `packaging/recipient_build.py` and
+`packaging/tests/test_recipient_build.py` are also granted under
+GPL-3.0-or-later by their explicit file-level notices.
 
 ## Separate terms and unresolved release inputs
 

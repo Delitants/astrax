@@ -10,12 +10,28 @@ the AstraX, Go, SRT, libdvbcsa, x/text, patch, and notice sources recorded
 in its payload. The public source snapshot alone is not the corresponding
 source package for the frozen Linux executable.
 
-The current held payload was built from AstraX source commit `6544bd0`.
-Its staged source recipe verifies the input archive, but its build mode
-requires a private QA environment. A recipient-usable build procedure and
-the exact installer-source snapshot still need to be added to a new release
-layout and tested after extraction. Do not relabel or modify the held layout
-in place to make it appear distribution-ready.
+The frozen executable was built from AstraX source commit `6544bd0`.
+`recipient_build.py` accepts its hash-pinned source stage and offers two
+non-serving build modes: `--output` retains the private QA preflight, while
+`--recipient-output` can run as an ordinary non-root user on Linux amd64.
+It uses staged source archives and a local Go module proxy; it never runs
+the candidate executable. A separate Go 1.26.9 toolchain and Ubuntu 24.04
+amd64 build dependencies (Python 3, C/C++ compiler, CMake, make, patch,
+dpkg-source, pkg-config and OpenSSL 3 development files) are required.
+
+From an extracted held layout, with the prerequisites already installed:
+
+```sh
+python3 -B share/build/recipient_build.py share/source --check-only
+python3 -B share/build/recipient_build.py share/source \
+  --recipient-output /absolute/path/to/new-build-directory
+```
+
+The output directory must not exist and remains private to the invoking
+user. A rebuild need not match the frozen ELF byte for byte; compare its
+source, build metadata, ABI, and behavior instead. The recipient mode has
+source-only tests, not a native recipient-build acceptance run. Do not
+relabel or modify a held layout in place to imply distribution readiness.
 
 `build_run.py` intentionally refuses `STATUS.json` unless both
 `candidate_qualified` and `distribution_cleared` are true and source/notice
