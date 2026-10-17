@@ -3,6 +3,15 @@
 
 # Installer source and release hold
 
+The planned first binary target is Ubuntu 24.04 amd64 with systemd. This is
+a target scope, not a readiness claim: the exact systemd unit passed static
+verification, but a manager-driven lifecycle test remains pending. An
+isolated SysV manual start/status/HTTP/stop test passed without boot testing;
+OpenRC installation used only a synthetic init marker. Neither OpenRC nor
+SysV is a qualified first-release target. The installer source retains both
+templates for future validation; do not advertise them as supported yet.
+No binary publication or production deployment is authorized by this scope.
+
 The self-extracting `.run` includes shell code from `installer_header.sh`,
 `installer_core.sh`, and `init/*.in`. A binary release must ship the exact
 installer source from the commit used to build that `.run`, in addition to
