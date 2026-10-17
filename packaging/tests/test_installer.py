@@ -62,6 +62,25 @@ class InstallerHeaderTests(unittest.TestCase):
         self.assertEqual((destination / "lib/libastrax_srt.so.1").readlink().as_posix(), "libastrax_srt.so.1.4.0")
         self.assertFalse((self.base / "astrax-ran").exists())
 
+    def test_held_qa_package_can_only_verify_and_extract(self):
+        held = make_release(self.base / "held", cleared=False)
+        qa_run = self.base / "astrax-QA-ONLY.run"
+        builder.build_qa_run(held, qa_run, identity=TEST_IDENTITY)
+        header = qa_run.read_bytes().split(MARKER, 1)[0]
+        self.assertNotIn(b"astrax_install", header)
+        self.assertNotIn(b"systemctl", header)
+        self.assertEqual(stat.S_IMODE(qa_run.stat().st_mode), 0o644)
+        for mode in ("--install", "--activate"):
+            result = subprocess.run(["sh", str(qa_run), mode], text=True, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("QA-only", result.stderr)
+        verification = subprocess.run(["sh", str(qa_run), "--verify"], capture_output=True)
+        self.assertEqual(verification.returncode, 0)
+        self.assertEqual(verification.stderr, b"")
+        destination = self.base / "qa-extracted"
+        self.assertEqual(subprocess.run(["sh", str(qa_run), "--extract", str(destination)], capture_output=True).returncode, 0)
+        self.assertEqual((destination / "astrax").read_bytes(), b"\x7fELFsynthetic-astrax")
+
     def test_checksum_corruption_fails(self):
         raw = self.installer.read_bytes()
         self.installer.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))

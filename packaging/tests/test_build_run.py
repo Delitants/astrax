@@ -140,6 +140,31 @@ class ReleaseGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "approved"):
             _validate_release(self.release)
 
+    def test_qa_builder_accepts_only_held_hash_pinned_payload(self):
+        from packaging.build_run import build_qa_run
+
+        held = make_release(self.base / "held", cleared=False)
+        run = build_qa_run(held, self.base / "astrax-QA-ONLY.run", identity=TEST_IDENTITY)
+        self.assertTrue(run.is_file())
+        self.assertEqual(json.loads((held / "STATUS.json").read_text())["distribution_cleared"], False)
+
+    def test_qa_builder_refuses_cleared_or_changed_payload(self):
+        from packaging.build_run import build_qa_run
+
+        with self.assertRaisesRegex(ValueError, "distribution_cleared"):
+            build_qa_run(self.release, self.base / "astrax-QA-ONLY.run", identity=TEST_IDENTITY)
+        held = make_release(self.base / "held", cleared=False)
+        (held / "astrax").write_bytes(b"\x7fELFsynthetic-Astrax")
+        with self.assertRaisesRegex(ValueError, "sha256"):
+            build_qa_run(held, self.base / "astrax-QA-ONLY.run", identity=TEST_IDENTITY)
+
+    def test_qa_builder_requires_unmistakable_output_name(self):
+        from packaging.build_run import build_qa_run
+
+        held = make_release(self.base / "held", cleared=False)
+        with self.assertRaisesRegex(ValueError, "QA-ONLY"):
+            build_qa_run(held, self.base / "astrax.run", identity=TEST_IDENTITY)
+
     def test_required_source_inventory_is_enforced(self):
         identity = {**TEST_IDENTITY, "required_source_paths": ["share/source/missing.tar.gz"]}
         with self.assertRaisesRegex(ValueError, "required source"):
