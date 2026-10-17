@@ -54,15 +54,31 @@ def _hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def validate_release(release_dir: Path, *, identity: dict | None = None, qa_only: bool = False) -> dict:
+def validate_release(
+    release_dir: Path, *, identity: dict | None = None,
+    qa_only: bool = False, private_install_qa: bool = False,
+) -> dict:
     release_dir = Path(release_dir)
     identity = APPROVED_IDENTITY if identity is None else identity
     status = json.loads((release_dir / "STATUS.json").read_text())
+    if qa_only and private_install_qa:
+        raise ValueError("QA modes are mutually exclusive")
     if qa_only:
         if status.get("distribution_cleared") is not False:
             raise ValueError("QA-only input requires distribution_cleared=false")
+    elif private_install_qa:
+        for field in ("distribution_cleared", "publication_cleared", "production_or_dvb_access"):
+            if status.get(field) is not False:
+                raise ValueError(f"private installer QA requires {field}=false")
+        if status.get("private_install_qa") is not True:
+            raise ValueError("private_install_qa must be true")
+        if status.get("candidate_qualified") is not True:
+            raise ValueError("candidate_qualified must be true")
+        for field in ("source_closure", "notice_closure"):
+            if status.get(field) != "complete":
+                raise ValueError(f"{field} must be complete")
     else:
-        for field in ("distribution_cleared", "candidate_qualified"):
+        for field in ("distribution_cleared", "publication_cleared", "candidate_qualified"):
             if status.get(field) is not True:
                 raise ValueError(f"{field} must be true")
         for field in ("source_closure", "notice_closure"):
@@ -141,9 +157,12 @@ def validate_release(release_dir: Path, *, identity: dict | None = None, qa_only
     return manifest
 
 
-def build_payload(release_dir: Path, output: Path, *, identity: dict | None = None, qa_only: bool = False) -> Path:
+def build_payload(
+    release_dir: Path, output: Path, *, identity: dict | None = None,
+    qa_only: bool = False, private_install_qa: bool = False,
+) -> Path:
     release_dir, output = Path(release_dir), Path(output)
-    manifest = validate_release(release_dir, identity=identity, qa_only=qa_only)
+    manifest = validate_release(release_dir, identity=identity, qa_only=qa_only, private_install_qa=private_install_qa)
     members = sorted(["MANIFEST.json", SONAME] + [entry["path"] for entry in manifest["files"]])
     output.parent.mkdir(parents=True, exist_ok=True)
     fd, staged = tempfile.mkstemp(prefix=f".{output.name}.", dir=output.parent)
@@ -178,11 +197,16 @@ def build_payload(release_dir: Path, output: Path, *, identity: dict | None = No
     return output
 
 
-def _build_run(release_dir: Path, output: Path, *, identity: dict | None, qa_only: bool) -> Path:
+def _build_run(
+    release_dir: Path, output: Path, *, identity: dict | None,
+    qa_only: bool, private_install_qa: bool = False,
+) -> Path:
     release_dir, output = Path(release_dir), Path(output)
     if qa_only and ("QA-ONLY" not in output.name or not output.name.endswith(".run")):
         raise ValueError("QA-only output name must contain QA-ONLY and end in .run")
-    manifest = validate_release(release_dir, identity=identity, qa_only=qa_only)
+    if private_install_qa and ("PRIVATE-INSTALL-QA" not in output.name or not output.name.endswith(".run")):
+        raise ValueError("private install QA output name must contain PRIVATE-INSTALL-QA and end in .run")
+    manifest = validate_release(release_dir, identity=identity, qa_only=qa_only, private_install_qa=private_install_qa)
     members = sorted(["MANIFEST.json", SONAME] + [entry["path"] for entry in manifest["files"]])
     hashes = {entry["path"]: entry["sha256"] for entry in manifest["files"]}
     hashes["MANIFEST.json"] = _hash_file(release_dir / "MANIFEST.json")
@@ -200,11 +224,15 @@ def _build_run(release_dir: Path, output: Path, *, identity: dict | None, qa_onl
             template_path = Path(__file__).with_name("init") / f"{init}.in"
             templates[init] = template_path.read_text() if template_path.exists() else ""
     with tempfile.TemporaryDirectory(dir=output.parent) as scratch:
-        payload = build_payload(release_dir, Path(scratch) / "payload.tar.gz", identity=identity, qa_only=qa_only)
+        payload = build_payload(
+            release_dir, Path(scratch) / "payload.tar.gz", identity=identity,
+            qa_only=qa_only, private_install_qa=private_install_qa,
+        )
         digest = _hash_file(payload)
         header = header.replace("@PAYLOAD_SHA@", digest).replace("@MEMBERS@", "\n".join(members))
         header = header.replace("@TYPES@", "\n".join("l" if name == SONAME else "-" for name in members))
         header = header.replace("@HASHES@", "\n".join(f"{name}:{hashes[name]}" for name in members if name != SONAME))
+        header = header.replace("@PRIVATE_INSTALL_QA@", "1" if private_install_qa else "0")
         if not qa_only:
             for init, contents in templates.items():
                 header = header.replace(f"@{init.upper()}@", contents.replace("'", "'\"'\"'"))
@@ -214,7 +242,7 @@ def _build_run(release_dir: Path, output: Path, *, identity: dict | None, qa_onl
             with os.fdopen(fd, "wb") as stream, payload.open("rb") as source:
                 stream.write(header.encode())
                 shutil.copyfileobj(source, stream)
-            os.chmod(staged, 0o644 if qa_only else 0o755)
+            os.chmod(staged, 0o644 if qa_only else 0o600 if private_install_qa else 0o755)
             os.replace(staged, output)
         finally:
             if os.path.exists(staged):
@@ -230,14 +258,20 @@ def build_qa_run(release_dir: Path, output: Path, *, identity: dict | None = Non
     return _build_run(release_dir, output, identity=identity, qa_only=True)
 
 
+def build_private_install_qa_run(release_dir: Path, output: Path, *, identity: dict | None = None) -> Path:
+    return _build_run(release_dir, output, identity=identity, qa_only=False, private_install_qa=True)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build the offline AstraX Linux installer")
     parser.add_argument("--release-dir", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--qa-extract-only", action="store_true", help="build a non-installing QA verify/extract package")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--qa-extract-only", action="store_true", help="build a non-installing QA verify/extract package")
+    modes.add_argument("--private-install-qa", action="store_true", help="build a private install-QA package, never for distribution")
     args = parser.parse_args()
     try:
-        builder = build_qa_run if args.qa_extract_only else build_run
+        builder = build_qa_run if args.qa_extract_only else build_private_install_qa_run if args.private_install_qa else build_run
         print(builder(args.release_dir, args.output))
     except (OSError, ValueError) as exc:
         parser.exit(1, f"release refused: {exc}\n")

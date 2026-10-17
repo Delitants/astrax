@@ -4,6 +4,7 @@
 set -eu
 
 ASTRAX_PAYLOAD_SHA256='@PAYLOAD_SHA@'
+ASTRAX_PRIVATE_INSTALL_QA='@PRIVATE_INSTALL_QA@'
 ASTRAX_EXPECTED_MEMBERS='@MEMBERS@'
 ASTRAX_EXPECTED_TYPES='@TYPES@'
 ASTRAX_EXPECTED_HASHES='@HASHES@'
@@ -53,6 +54,7 @@ extract_payload() {
 
 usage() {
     echo 'Usage: astrax.run --help | --verify | --extract DIR | --install | --activate'
+    [ "$ASTRAX_PRIVATE_INSTALL_QA" != 1 ] || echo 'PRIVATE INSTALLER QA - NOT FOR DISTRIBUTION; activation disabled'
 }
 
 case ${1-} in
@@ -61,6 +63,17 @@ case ${1-} in
     --extract) [ "$#" -eq 2 ] || exit 2; mode=$1; destination=$2 ;;
     *) usage >&2; exit 2 ;;
 esac
+
+if [ "$ASTRAX_PRIVATE_INSTALL_QA" = 1 ]; then
+    if [ "$mode" = --activate ]; then
+        echo 'private installer QA package cannot activate a service' >&2
+        exit 1
+    fi
+    if [ "$mode" = --install ] && [ "${ASTRAX_PRIVATE_INSTALL_QA_ACK:-}" != 1 ]; then
+        echo 'private installer QA acknowledgement required: ASTRAX_PRIVATE_INSTALL_QA_ACK=1' >&2
+        exit 1
+    fi
+fi
 
 umask 077
 work=$(mktemp -d "${TMPDIR:-/tmp}/astrax-run.XXXXXX") || exit 1

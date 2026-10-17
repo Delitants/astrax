@@ -30,7 +30,7 @@ def build_payload(path, output):
     return _build_payload(path, output, identity=TEST_IDENTITY)
 
 
-def make_release(root: Path, *, cleared: bool = True) -> Path:
+def make_release(root: Path, *, cleared: bool = True, publication: bool | None = None) -> Path:
     root.mkdir()
     files = {
         "astrax": b"\x7fELFsynthetic-astrax",
@@ -40,6 +40,9 @@ def make_release(root: Path, *, cleared: bool = True) -> Path:
     }
     status = {
         "distribution_cleared": cleared,
+        "publication_cleared": cleared if publication is None else publication,
+        "private_install_qa": not cleared,
+        "production_or_dvb_access": False,
         "candidate_qualified": True,
         "source_closure": "complete",
         "notice_closure": "complete",
@@ -91,6 +94,35 @@ class ReleaseGateTests(unittest.TestCase):
         status_path.write_text('{"distribution_cleared": false}\n')
         with self.assertRaisesRegex(ValueError, "distribution_cleared"):
             validate_release(self.release)
+
+    def test_release_builder_refuses_stale_distribution_without_publication(self):
+        stale = make_release(self.base / "stale", publication=False)
+        with self.assertRaisesRegex(ValueError, "publication_cleared"):
+            validate_release(stale)
+
+    def test_private_install_builder_requires_held_qualified_layout(self):
+        from packaging.build_run import build_private_install_qa_run
+
+        held = make_release(self.base / "held", cleared=False)
+        output = self.base / "astrax-PRIVATE-INSTALL-QA.run"
+        result = build_private_install_qa_run(held, output, identity=TEST_IDENTITY)
+        self.assertEqual(result, output)
+        self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+        with self.assertRaisesRegex(ValueError, "distribution_cleared"):
+            build_private_install_qa_run(self.release, self.base / "rejected-PRIVATE-INSTALL-QA.run", identity=TEST_IDENTITY)
+
+    def test_private_install_builder_refuses_ambiguous_name_or_status(self):
+        from packaging.build_run import build_private_install_qa_run
+
+        held = make_release(self.base / "held", cleared=False)
+        with self.assertRaisesRegex(ValueError, "PRIVATE-INSTALL-QA"):
+            build_private_install_qa_run(held, self.base / "astrax.run", identity=TEST_IDENTITY)
+        status_path = held / "STATUS.json"
+        status = json.loads(status_path.read_text())
+        status["private_install_qa"] = False
+        status_path.write_text(json.dumps(status) + "\n")
+        with self.assertRaisesRegex(ValueError, "private_install_qa"):
+            build_private_install_qa_run(held, self.base / "rejected-PRIVATE-INSTALL-QA.run", identity=TEST_IDENTITY)
 
     def test_missing_corresponding_source_is_refused(self):
         (self.release / "share/source/README.txt").unlink()

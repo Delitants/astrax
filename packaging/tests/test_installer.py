@@ -83,6 +83,22 @@ class InstallerHeaderTests(unittest.TestCase):
         self.assertEqual(subprocess.run(["sh", str(qa_run), "--extract", str(destination)], capture_output=True).returncode, 0)
         self.assertEqual((destination / "astrax").read_bytes(), b"\x7fELFsynthetic-astrax")
 
+    def test_private_install_qa_package_blocks_unacknowledged_install_and_activation(self):
+        held = make_release(self.base / "held", cleared=False)
+        qa_run = self.base / "astrax-PRIVATE-INSTALL-QA.run"
+        builder.build_private_install_qa_run(held, qa_run, identity=TEST_IDENTITY)
+        header = qa_run.read_bytes().split(MARKER, 1)[0]
+        self.assertIn(b"astrax_install", header)
+        self.assertEqual(stat.S_IMODE(qa_run.stat().st_mode), 0o600)
+        self.assertEqual(subprocess.run(["sh", str(qa_run), "--verify"], capture_output=True).returncode, 0)
+        rejected_install = subprocess.run(["sh", str(qa_run), "--install"], text=True, capture_output=True)
+        self.assertNotEqual(rejected_install.returncode, 0)
+        self.assertIn("private installer QA acknowledgement", rejected_install.stderr)
+        env = {**os.environ, "ASTRAX_PRIVATE_INSTALL_QA_ACK": "1"}
+        rejected_activate = subprocess.run(["sh", str(qa_run), "--activate"], env=env, text=True, capture_output=True)
+        self.assertNotEqual(rejected_activate.returncode, 0)
+        self.assertIn("private installer QA", rejected_activate.stderr)
+
     def test_checksum_corruption_fails(self):
         raw = self.installer.read_bytes()
         self.installer.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
@@ -176,12 +192,14 @@ class InstallerCoreTests(unittest.TestCase):
             (self.root / "proc/1/comm").write_text("init\n")
             (self.root / "etc/init.d").mkdir(parents=True, exist_ok=True)
 
-    def run_core(self, function, *, extra_env=None):
+    def run_core(self, function, *, extra_env=None, restrictive_umask=False):
         env = os.environ.copy()
         env["ASTRAX_CORE_LIBRARY_ONLY"] = "1"
         env["ASTRAX_TEMPLATE_DIR"] = str(self.repo / "packaging/init")
         env.update(extra_env or {})
         script = f'. "{self.repo / "packaging/installer_core.sh"}"; {function} "$1" "$2"'
+        if restrictive_umask:
+            script = "umask 077; " + script
         return subprocess.run(
             ["sh", "-c", script, "sh", str(self.root), str(self.release)],
             env=env, text=True, capture_output=True, check=False,
@@ -327,6 +345,15 @@ class InstallerCoreTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE((runtime / "share/source").stat().st_mode), 0o755)
         self.assertEqual(stat.S_IMODE((runtime / "astrax").stat().st_mode), 0o755)
         self.assertEqual(stat.S_IMODE((self.root / "var/lib/astrax").stat().st_mode), 0o700)
+
+    def test_restrictive_umask_preserves_service_read_and_execute_access(self):
+        self.configure_init("systemd")
+        result = self.run_core("astrax_install", restrictive_umask=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        runtime = self.root / "opt/astrax"
+        self.assertEqual(stat.S_IMODE((runtime / "astrax").stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE((runtime / "MANIFEST.json").stat().st_mode), 0o644)
+        self.assertEqual(stat.S_IMODE((runtime / "lib/libastrax_srt.so.1.4.0").stat().st_mode), 0o644)
 
     def test_raced_runtime_directory_is_preserved(self):
         self.configure_init("systemd")

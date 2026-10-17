@@ -180,6 +180,8 @@ astrax_install() {
     astrax_created_runtime=1
     cp -R "$astrax_stage/." "$astrax_root/opt/astrax/" || return 1
     find "$astrax_root/opt/astrax" -type d -exec chmod 755 {} \; || return 1
+    find "$astrax_root/opt/astrax" -type f -exec chmod 644 {} + || return 1
+    chmod 755 "$astrax_root/opt/astrax/astrax" || return 1
     rm -rf "$astrax_stage"
     astrax_stage=
     if [ "$astrax_root" != / ] && [ "${ASTRAX_TEST_FAIL_AFTER:-}" = runtime ]; then

@@ -33,8 +33,12 @@ source, build metadata, ABI, and behavior instead. The recipient mode has
 source-only tests, not a native recipient-build acceptance run. Do not
 relabel or modify a held layout in place to imply distribution readiness.
 
-`build_run.py` intentionally refuses `STATUS.json` unless both
-`candidate_qualified` and `distribution_cleared` are true and source/notice
-closure is complete. `--qa-extract-only` instead makes a non-installing,
-non-distributable verification package from a held payload; it is not a
-shortcut to a release installer.
+`build_run.py` refuses a distributable package unless `candidate_qualified`,
+`distribution_cleared`, and `publication_cleared` are all true and
+source/notice closure is complete. `--qa-extract-only` makes a non-installing
+verification package from a held payload. `--private-install-qa` requires
+an explicitly held, qualified layout and produces a mode-0600 package named
+`PRIVATE-INSTALL-QA`. That package requires
+`ASTRAX_PRIVATE_INSTALL_QA_ACK=1` for `--install` and always refuses
+`--activate`; it is for an isolated disposable root only, not distribution
+or production use.
