@@ -1,0 +1,32 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) Delitants
+### BEGIN INIT INFO
+# Provides:          astrax
+# Required-Start:    $network
+# Required-Stop:     $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: AstraX streaming server
+### END INIT INFO
+
+case "$1" in
+    start)
+        start-stop-daemon --start --background --make-pidfile --pidfile /run/astrax.pid \
+            --chuid astrax:astrax --exec /opt/astrax/astrax -- \
+            --config /var/lib/astrax/astrax-config.json
+        ;;
+    stop)
+        start-stop-daemon --stop --pidfile /run/astrax.pid --retry TERM/20/KILL/5
+        ;;
+    restart)
+        "$0" stop && "$0" start
+        ;;
+    status)
+        start-stop-daemon --status --pidfile /run/astrax.pid
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}" >&2
+        exit 2
+        ;;
+esac

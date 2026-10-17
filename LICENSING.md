@@ -31,6 +31,18 @@ grant because comments would invalidate JSON. Existing notices were preserved.
 Project documentation with its own SPDX notice is governed by that notice,
 not by an inference from this table.
 
+The grant also covers the 11 project-authored installer source and test files
+tracked under `packaging/` at commit
+`2d9b0c313592721c9c640d161ebb9a8c24beed05`: the two package
+`__init__.py` files, `build_run.py`, `installer_core.sh`,
+`installer_header.sh`, `qa_extract_header.sh`, the three `init/*.in`
+templates, and the two `tests/test_*.py` files. Each has an explicit SPDX
+and copyright notice in this source snapshot. This grant does not cover
+future files merely because they are added under `packaging/`.
+The project-authored `packaging/recipient_build.py` and
+`packaging/tests/test_recipient_build.py` are also granted under
+GPL-3.0-or-later by their explicit file-level notices.
+
 ## Separate terms and unresolved release inputs
 
 - `v4l-utils-1.18.0/` and the four `v4l-utils_1.18.0*` source/packaging
