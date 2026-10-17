@@ -9,7 +9,11 @@ versioned library, and nonempty `share/notices/` and `share/source/` trees.
 Every regular file must appear in the manifest with its SHA-256, size and mode.
 The builder refuses a release unless `distribution_cleared` and
 `candidate_qualified` are true and `source_closure` and `notice_closure` are
-`complete`. It also refuses draft files and the old `bin/astrax` layout,
+`complete`. It pins the frozen executable, private SRT library, source commit
+and AstraX source archive hashes, and requires the listed source/notice inputs
+in `packaging/build_run.py`. This is an identity/inventory gate, not a legal
+opinion about the sufficiency of the final notices. It also refuses draft
+files and the old `bin/astrax` layout,
 which breaks this executable's `$ORIGIN/lib` lookup.
 
 The current Stage C draft is intentionally held and cannot be packaged for

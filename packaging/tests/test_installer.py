@@ -3,6 +3,7 @@ import hashlib
 import io
 import copy
 import os
+import stat
 from pathlib import Path
 import re
 import subprocess
@@ -11,7 +12,7 @@ import tempfile
 import unittest
 
 from packaging import build_run as builder
-from packaging.tests.test_build_run import make_release
+from packaging.tests.test_build_run import make_release, TEST_IDENTITY
 
 
 MARKER = b"__ASTRAX_PAYLOAD_BELOW__\n"
@@ -24,7 +25,7 @@ class InstallerHeaderTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.release = make_release(self.base / "release")
         self.installer = self.base / "astrax.run"
-        builder.build_run(self.release, self.installer)
+        builder.build_run(self.release, self.installer, identity=TEST_IDENTITY)
 
     def run_installer(self, *args):
         return subprocess.run(
@@ -43,6 +44,8 @@ class InstallerHeaderTests(unittest.TestCase):
                 for member in original.getmembers():
                     data = original.extractfile(member) if member.isfile() else None
                     result = mutate(copy.copy(member))
+                    if isinstance(result, tuple):
+                        result, data = result
                     archive.addfile(result, data)
         original.close()
         forged = output.getvalue()
@@ -86,6 +89,24 @@ class InstallerHeaderTests(unittest.TestCase):
 
     def test_duplicate_member_fails_before_extraction(self):
         self.forge_payload(lambda member: self._rename(member, "astrax") if member.name == "STATUS.json" else member)
+        self.assertNotEqual(self.run_installer("--verify").returncode, 0)
+
+    def test_regular_member_changed_with_recomputed_archive_hash_is_rejected(self):
+        def change_bytes(member):
+            if member.name == "astrax":
+                return member, io.BytesIO(b"\x7fELFsynthetic-Astrax")
+            return member
+        self.forge_payload(change_bytes)
+        self.assertNotEqual(self.run_installer("--verify").returncode, 0)
+
+    def test_second_symlink_at_regular_member_name_is_rejected(self):
+        def replace_type(member):
+            if member.name == "astrax":
+                member.type = tarfile.SYMTYPE
+                member.linkname = "/outside"
+                member.size = 0
+            return member
+        self.forge_payload(replace_type)
         self.assertNotEqual(self.run_installer("--verify").returncode, 0)
 
     def test_install_on_mac_fails_closed_without_system_change(self):
@@ -272,3 +293,73 @@ class InstallerCoreTests(unittest.TestCase):
         self.assertEqual(self.run_core("astrax_activate").returncode, 0)
         self.assertEqual(self.run_core("astrax_activate").returncode, 0)
         self.assertEqual((self.root / "qa/service-actions").read_text().splitlines(), ["enable", "start", "start"])
+
+    def test_installed_runtime_is_traversable_by_service_account(self):
+        self.configure_init("systemd")
+        for directory in self.release.rglob("*"):
+            if directory.is_dir():
+                directory.chmod(0o700)
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        runtime = self.root / "opt/astrax"
+        self.assertEqual(stat.S_IMODE(runtime.stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE((runtime / "lib").stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE((runtime / "share/source").stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE((runtime / "astrax").stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE((self.root / "var/lib/astrax").stat().st_mode), 0o700)
+
+    def test_raced_runtime_directory_is_preserved(self):
+        self.configure_init("systemd")
+        result = self.run_core("astrax_install", extra_env={"ASTRAX_TEST_RACE_CREATE_RUNTIME": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.root / "opt/astrax/preexisting").read_text(), "keep me")
+        self.assertFalse((self.root / "etc/systemd/system/astrax.service").exists())
+
+    def test_service_stage_failure_leaves_no_partial_service(self):
+        self.configure_init("systemd")
+        result = self.run_core("astrax_install", extra_env={"ASTRAX_TEST_FAIL_SERVICE_STAGE": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "etc/systemd/system/astrax.service").exists())
+        self.assertFalse((self.root / "opt/astrax").exists())
+
+    def test_other_init_service_is_a_conflict(self):
+        self.configure_init("systemd")
+        old = self.root / "etc/init.d/astrax"
+        old.parent.mkdir(parents=True)
+        old.write_text("keep me")
+        result = self.run_core("astrax_install")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(old.read_text(), "keep me")
+        self.assertFalse((self.root / "opt/astrax").exists())
+
+    def test_compatible_account_requires_system_uid_and_primary_group(self):
+        core = self.repo / "packaging/installer_core.sh"
+        valid = "astrax:x:997:997::/var/lib/astrax:/usr/sbin/nologin"
+        group = "astrax:x:997:"
+        for passwd, group_entry, accepted in (
+            (valid, group, True),
+            (valid.replace(":997:997:", ":1001:997:"), group, False),
+            (valid, "astrax:x:998:", False),
+            (valid.replace("/usr/sbin/nologin", "/bin/sh"), group, False),
+        ):
+            with self.subTest(passwd=passwd, group=group_entry):
+                result = subprocess.run(
+                    ["sh", "-c", f'. "{core}"; astrax_account_entry_compatible "$1" "$2"',
+                     "sh", passwd, group_entry],
+                    env={**os.environ, "ASTRAX_CORE_LIBRARY_ONLY": "1"},
+                    capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
+
+    def test_abi_library_resolution_ignores_other_architectures(self):
+        core = self.repo / "packaging/installer_core.sh"
+        listing = (
+            "libstdc++.so.6 (libc6) => /lib/i386/libstdc++.so.6\n"
+            "libstdc++.so.6 (libc6,x86-64) => /lib/x86_64/libstdc++.so.6\n"
+        )
+        result = subprocess.run(
+            ["sh", "-c", f'. "{core}"; astrax_ldconfig_path "$1" libstdc++.so.6', "sh", listing],
+            env={**os.environ, "ASTRAX_CORE_LIBRARY_ONLY": "1"},
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "/lib/x86_64/libstdc++.so.6")

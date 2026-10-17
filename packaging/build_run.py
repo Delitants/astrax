@@ -13,6 +13,29 @@ import tempfile
 
 SONAME = "lib/libastrax_srt.so.1"
 SONAME_TARGET = "libastrax_srt.so.1.4.0"
+APPROVED_IDENTITY = {
+    "binary_sha256": "46df8b6d120586b184d16a41667488c8f12ace2550f65a9a920dd1b0a0c2363a",
+    "srt_sha256": "4430fa3e9384620e1cc930f71187e5ee27194adcb4443daf554ae63b92d05c0d",
+    "source_commit": "6544bd0d2f5abab0654b35078d7279d5e026cd9d",
+    "source_sha256": "515781316a1626840e8a4ae08dbea3d2993442f3ccfbe23ee3a2214a629f3038",
+    "source_path": "share/source/source/astrax-6544bd0-source.tar.gz",
+    "required_source_paths": [
+        "share/source/source/astrax-6544bd0-source.tar.gz",
+        "share/source/source/go1.26.9.src.tar.gz",
+        "share/source/source/golang.org_x_text_v0.37.0.zip",
+        "share/source/source/libdvbcsa-1.1.0.tar.gz",
+        "share/source/source/srt_1.4.0.orig.tar.gz",
+        "share/source/source/srt_1.4.0-1build1.debian.tar.xz",
+        "share/source/patches/guard.patch",
+        "share/source/patches/001-multiarch-rpath.patch",
+    ],
+    "required_notice_paths": [
+        "share/notices/THIRD-PARTY-NOTICES.txt",
+        "share/notices/MPL-2.0.txt",
+        "share/notices/libdvbcsa-COPYING",
+        "share/notices/x-text-0.37.0-LICENSE.txt",
+    ],
+}
 
 
 def _safe_name(name: str) -> bool:
@@ -29,8 +52,9 @@ def _hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def validate_release(release_dir: Path) -> dict:
+def validate_release(release_dir: Path, *, identity: dict | None = None) -> dict:
     release_dir = Path(release_dir)
+    identity = APPROVED_IDENTITY if identity is None else identity
     status = json.loads((release_dir / "STATUS.json").read_text())
     for field in ("distribution_cleared", "candidate_qualified"):
         if status.get(field) is not True:
@@ -75,6 +99,21 @@ def validate_release(release_dir: Path) -> dict:
             raise ValueError(f"missing {prefix} files")
     if any("DRAFT" in name.upper() for name in names):
         raise ValueError("draft material is not distributable")
+    if status.get("source_commit") != identity["source_commit"]:
+        raise ValueError("approved source commit mismatch")
+    pinned = (
+        ("astrax", "binary_sha256", "approved binary"),
+        (f"lib/{SONAME_TARGET}", "srt_sha256", "approved SRT library"),
+        (identity["source_path"], "source_sha256", "approved source archive"),
+    )
+    by_name = {entry["path"]: entry["sha256"] for entry in entries}
+    for path, field, label in pinned:
+        if by_name.get(path) != identity[field]:
+            raise ValueError(f"{label} hash mismatch")
+    for label, field in (("required source", "required_source_paths"), ("required notice", "required_notice_paths")):
+        missing = set(identity[field]) - names
+        if missing:
+            raise ValueError(f"{label} inventory missing: {sorted(missing)}")
 
     observed: set[str] = set()
     for path in release_dir.rglob("*"):
@@ -96,9 +135,9 @@ def validate_release(release_dir: Path) -> dict:
     return manifest
 
 
-def build_payload(release_dir: Path, output: Path) -> Path:
+def build_payload(release_dir: Path, output: Path, *, identity: dict | None = None) -> Path:
     release_dir, output = Path(release_dir), Path(output)
-    manifest = validate_release(release_dir)
+    manifest = validate_release(release_dir, identity=identity)
     members = sorted(["MANIFEST.json", SONAME] + [entry["path"] for entry in manifest["files"]])
     output.parent.mkdir(parents=True, exist_ok=True)
     fd, staged = tempfile.mkstemp(prefix=f".{output.name}.", dir=output.parent)
@@ -133,10 +172,12 @@ def build_payload(release_dir: Path, output: Path) -> Path:
     return output
 
 
-def build_run(release_dir: Path, output: Path) -> Path:
+def build_run(release_dir: Path, output: Path, *, identity: dict | None = None) -> Path:
     release_dir, output = Path(release_dir), Path(output)
-    manifest = validate_release(release_dir)
+    manifest = validate_release(release_dir, identity=identity)
     members = sorted(["MANIFEST.json", SONAME] + [entry["path"] for entry in manifest["files"]])
+    hashes = {entry["path"]: entry["sha256"] for entry in manifest["files"]}
+    hashes["MANIFEST.json"] = _hash_file(release_dir / "MANIFEST.json")
     for name in members:
         if not re.fullmatch(r"[A-Za-z0-9_./+-]+", name):
             raise ValueError(f"unsupported archive name: {name}")
@@ -149,9 +190,11 @@ def build_run(release_dir: Path, output: Path) -> Path:
         template_path = Path(__file__).with_name("init") / f"{init}.in"
         templates[init] = template_path.read_text() if template_path.exists() else ""
     with tempfile.TemporaryDirectory(dir=output.parent) as scratch:
-        payload = build_payload(release_dir, Path(scratch) / "payload.tar.gz")
+        payload = build_payload(release_dir, Path(scratch) / "payload.tar.gz", identity=identity)
         digest = _hash_file(payload)
         header = header.replace("@PAYLOAD_SHA@", digest).replace("@MEMBERS@", "\n".join(members))
+        header = header.replace("@TYPES@", "\n".join("l" if name == SONAME else "-" for name in members))
+        header = header.replace("@HASHES@", "\n".join(f"{name}:{hashes[name]}" for name in members if name != SONAME))
         for init, contents in templates.items():
             header = header.replace(f"@{init.upper()}@", contents.replace("'", "'\"'\"'"))
         header = header.replace("@CORE@", core.replace("'", "'\"'\"'"))

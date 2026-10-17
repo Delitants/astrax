@@ -15,6 +15,23 @@ astrax_detect_init() {
     fi
 }
 
+astrax_account_entry_compatible() {
+    passwd=$1
+    group=$2
+    name=$(printf '%s\n' "$passwd" | cut -d: -f1)
+    uid=$(printf '%s\n' "$passwd" | cut -d: -f3)
+    gid=$(printf '%s\n' "$passwd" | cut -d: -f4)
+    home=$(printf '%s\n' "$passwd" | cut -d: -f6)
+    shell=$(printf '%s\n' "$passwd" | cut -d: -f7)
+    group_name=$(printf '%s\n' "$group" | cut -d: -f1)
+    group_gid=$(printf '%s\n' "$group" | cut -d: -f3)
+    case "$uid:$gid:$group_gid" in *[!0-9:]*|:*) return 1 ;; esac
+    [ "$name" = astrax ] && [ "$group_name" = astrax ] &&
+        [ "$uid" -lt 1000 ] && [ "$gid" = "$group_gid" ] &&
+        [ "$home" = /var/lib/astrax ] || return 1
+    case "$shell" in */nologin) return 0 ;; *) return 1 ;; esac
+}
+
 astrax_account_status() {
     root=$1
     if [ "$root" != / ]; then
@@ -23,14 +40,16 @@ astrax_account_status() {
         return
     fi
     entry=$(getent passwd astrax 2>/dev/null) || { echo absent; return; }
-    home=$(printf '%s\n' "$entry" | cut -d: -f6)
-    shell=$(printf '%s\n' "$entry" | cut -d: -f7)
-    case "$shell" in */nologin) valid_shell=1 ;; *) valid_shell=0 ;; esac
-    if [ "$home" = /var/lib/astrax ] && [ "$valid_shell" -eq 1 ]; then
+    group=$(getent group astrax 2>/dev/null) || { echo incompatible; return; }
+    if astrax_account_entry_compatible "$entry" "$group"; then
         echo compatible
     else
         echo incompatible
     fi
+}
+
+astrax_ldconfig_path() {
+    printf '%s\n' "$1" | awk -v lib="$2" '$1 == lib && $2 == "(libc6,x86-64)" && $3 == "=>" { print $4; exit }'
 }
 
 astrax_check_abi() {
@@ -54,10 +73,11 @@ astrax_check_abi() {
     fi
     libs=$(ldconfig -p 2>/dev/null) || return 1
     for lib in libcrypto.so.3 libstdc++.so.6 libgcc_s.so.1 libm.so.6 libc.so.6; do
-        printf '%s\n' "$libs" | grep -q "[[:space:]]$lib[[:space:]]" || { echo "missing $lib" >&2; return 1; }
+        path=$(astrax_ldconfig_path "$libs" "$lib")
+        [ -n "$path" ] && [ -f "$path" ] || { echo "missing x86-64 $lib" >&2; return 1; }
+        if [ "$lib" = libstdc++.so.6 ]; then cxx=$path; fi
     done
-    cxx=$(printf '%s\n' "$libs" | awk '/libstdc\+\+\.so\.6[[:space:]]/ {print $NF; exit}')
-    [ -f "$cxx" ] && strings "$cxx" | grep -qx GLIBCXX_3.4.32 || {
+    strings "$cxx" | grep -qx GLIBCXX_3.4.32 || {
         echo 'libstdc++ with GLIBCXX_3.4.32 required' >&2
         return 1
     }
@@ -83,7 +103,8 @@ astrax_preflight() {
     astrax_check_abi "$root" || return 1
     init=$(astrax_detect_init "$root") || return 1
     service=$(astrax_service_path "$root" "$init")
-    for path in "$root/opt/astrax" "$root/var/lib/astrax" "$service"; do
+    for path in "$root/opt/astrax" "$root/var/lib/astrax" \
+        "$root/etc/systemd/system/astrax.service" "$root/etc/init.d/astrax"; do
         [ ! -e "$path" ] && [ ! -L "$path" ] || { echo "existing path: $path" >&2; return 1; }
     done
     [ "$(astrax_account_status "$root")" != incompatible ] || { echo 'incompatible astrax account' >&2; return 1; }
@@ -100,6 +121,7 @@ astrax_preflight() {
 
 astrax_rollback() {
     [ -z "${astrax_stage:-}" ] || rm -rf "$astrax_stage"
+    [ -z "${astrax_service_stage:-}" ] || rm -f "$astrax_service_stage"
     [ "${astrax_created_service:-0}" -eq 0 ] || rm -f "$astrax_service"
     [ "${astrax_created_runtime:-0}" -eq 0 ] || rm -rf "$astrax_root/opt/astrax"
     [ "${astrax_created_state:-0}" -eq 0 ] || rm -rf "$astrax_root/var/lib/astrax"
@@ -117,6 +139,7 @@ astrax_install() {
     astrax_created_state=0
     astrax_created_runtime=0
     astrax_created_service=0
+    astrax_service_stage=
     mkdir -p "$astrax_root/opt" || return 1
     astrax_stage=$(mktemp -d "$astrax_root/opt/.astrax-stage.XXXXXX") || return 1
     trap 'astrax_rollback' 0
@@ -131,8 +154,12 @@ astrax_install() {
         astrax_created_account=1
     fi
     if [ "$astrax_root" = / ]; then
-        if getent group video >/dev/null 2>&1; then
+        if getent group video >/dev/null 2>&1 && [ "$astrax_created_account" -eq 1 ]; then
             usermod -aG video astrax || return 1
+        elif getent group video >/dev/null 2>&1; then
+            if ! id -nG astrax | tr ' ' '\n' | grep -qx video; then
+                echo 'existing astrax account lacks video group; configure DVB access separately' >&2
+            fi
         else
             echo 'video group absent; configure DVB device access separately' >&2
         fi
@@ -141,10 +168,18 @@ astrax_install() {
     fi
     mkdir -p "$astrax_root/var/lib/astrax" || return 1
     astrax_created_state=1
+    chmod 700 "$astrax_root/var/lib/astrax" || return 1
     if [ "$astrax_root" = / ]; then chown astrax:astrax "$astrax_root/var/lib/astrax" || return 1; fi
-    mv "$astrax_stage" "$astrax_root/opt/astrax" || return 1
-    astrax_stage=
+    if [ "$astrax_root" != / ] && [ "${ASTRAX_TEST_RACE_CREATE_RUNTIME:-}" = 1 ]; then
+        mkdir "$astrax_root/opt/astrax" || return 1
+        printf 'keep me' > "$astrax_root/opt/astrax/preexisting"
+    fi
+    mkdir "$astrax_root/opt/astrax" || return 1
     astrax_created_runtime=1
+    cp -R "$astrax_stage/." "$astrax_root/opt/astrax/" || return 1
+    find "$astrax_root/opt/astrax" -type d -exec chmod 755 {} \; || return 1
+    rm -rf "$astrax_stage"
+    astrax_stage=
     if [ "$astrax_root" != / ] && [ "${ASTRAX_TEST_FAIL_AFTER:-}" = runtime ]; then
         echo 'injected runtime failure' >&2
         return 1
@@ -152,9 +187,17 @@ astrax_install() {
     template_dir=${ASTRAX_TEMPLATE_DIR:-}
     [ -n "$template_dir" ] && [ -f "$template_dir/$astrax_init.in" ] || { echo 'init template missing' >&2; return 1; }
     mkdir -p "$(dirname "$astrax_service")" || return 1
-    cp "$template_dir/$astrax_init.in" "$astrax_service" || return 1
+    astrax_service_stage=$(mktemp "$(dirname "$astrax_service")/.astrax-service.XXXXXX") || return 1
+    cp "$template_dir/$astrax_init.in" "$astrax_service_stage" || return 1
+    if [ "$astrax_root" != / ] && [ "${ASTRAX_TEST_FAIL_SERVICE_STAGE:-}" = 1 ]; then
+        echo 'injected service staging failure' >&2
+        return 1
+    fi
+    if [ "$astrax_init" = systemd ]; then chmod 644 "$astrax_service_stage"; else chmod 755 "$astrax_service_stage"; fi
+    ln "$astrax_service_stage" "$astrax_service" || return 1
     astrax_created_service=1
-    if [ "$astrax_init" = systemd ]; then chmod 644 "$astrax_service"; else chmod 755 "$astrax_service"; fi
+    rm -f "$astrax_service_stage"
+    astrax_service_stage=
     if [ "$astrax_root" = / ] && [ "$astrax_init" = systemd ]; then systemctl daemon-reload || return 1; fi
     trap - 0 1 2 3 15
     echo "AstraX installed; $astrax_init service created but not enabled or started"

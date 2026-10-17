@@ -3,6 +3,8 @@ set -eu
 
 ASTRAX_PAYLOAD_SHA256='@PAYLOAD_SHA@'
 ASTRAX_EXPECTED_MEMBERS='@MEMBERS@'
+ASTRAX_EXPECTED_TYPES='@TYPES@'
+ASTRAX_EXPECTED_HASHES='@HASHES@'
 ASTRAX_CORE='@CORE@'
 ASTRAX_SYSTEMD_TEMPLATE='@SYSTEMD@'
 ASTRAX_OPENRC_TEMPLATE='@OPENRC@'
@@ -17,10 +19,18 @@ verify_payload() {
     [ "$actual" = "$ASTRAX_PAYLOAD_SHA256" ] || { echo 'payload SHA-256 mismatch' >&2; return 1; }
     actual_members=$(tar -tzf "$1") || { echo 'invalid payload archive' >&2; return 1; }
     [ "$actual_members" = "$ASTRAX_EXPECTED_MEMBERS" ] || { echo 'payload member list mismatch' >&2; return 1; }
+    actual_types=$(tar -tvzf "$1" | awk '{ print substr($1, 1, 1) }') || return 1
+    [ "$actual_types" = "$ASTRAX_EXPECTED_TYPES" ] || { echo 'payload member type mismatch' >&2; return 1; }
     tar -tvzf "$1" | grep -Eq '^l.*[[:space:]]lib/libastrax_srt\.so\.1 -> libastrax_srt\.so\.1\.4\.0$' || {
         echo 'invalid SRT SONAME symlink' >&2
         return 1
     }
+    for entry in $ASTRAX_EXPECTED_HASHES; do
+        name=${entry%%:*}
+        expected=${entry#*:}
+        actual=$(tar -xOzf "$1" "$name" | sha256sum | cut -d ' ' -f 1)
+        [ "$actual" = "$expected" ] || { echo "payload file sha256 mismatch: $name" >&2; return 1; }
+    done
 }
 
 extract_payload() {

@@ -6,7 +6,26 @@ import tarfile
 import tempfile
 import unittest
 
-from packaging.build_run import build_payload, validate_release
+from packaging.build_run import APPROVED_IDENTITY, build_payload as _build_payload, validate_release as _validate_release
+
+
+TEST_IDENTITY = {
+    "binary_sha256": hashlib.sha256(b"\x7fELFsynthetic-astrax").hexdigest(),
+    "srt_sha256": hashlib.sha256(b"\x7fELFsynthetic-srt").hexdigest(),
+    "source_commit": "synthetic",
+    "source_sha256": hashlib.sha256(b"Synthetic source\n").hexdigest(),
+    "source_path": "share/source/README.txt",
+    "required_source_paths": ["share/source/README.txt"],
+    "required_notice_paths": ["share/notices/THIRD-PARTY.txt"],
+}
+
+
+def validate_release(path):
+    return _validate_release(path, identity=TEST_IDENTITY)
+
+
+def build_payload(path, output):
+    return _build_payload(path, output, identity=TEST_IDENTITY)
 
 
 def make_release(root: Path, *, cleared: bool = True) -> Path:
@@ -22,6 +41,7 @@ def make_release(root: Path, *, cleared: bool = True) -> Path:
         "candidate_qualified": True,
         "source_closure": "complete",
         "notice_closure": "complete",
+        "source_commit": "synthetic",
     }
     files["STATUS.json"] = (json.dumps(status, sort_keys=True) + "\n").encode()
     for name, contents in files.items():
@@ -110,6 +130,20 @@ class ReleaseGateTests(unittest.TestCase):
         (self.release / "share/source/extra.txt").write_text("unlisted")
         with self.assertRaisesRegex(ValueError, "unlisted"):
             validate_release(self.release)
+
+    def test_unpinned_binary_is_refused_even_with_self_consistent_manifest(self):
+        identity = {**TEST_IDENTITY, "binary_sha256": APPROVED_IDENTITY["binary_sha256"]}
+        with self.assertRaisesRegex(ValueError, "approved binary"):
+            _validate_release(self.release, identity=identity)
+
+    def test_default_builder_rejects_synthetic_release(self):
+        with self.assertRaisesRegex(ValueError, "approved"):
+            _validate_release(self.release)
+
+    def test_required_source_inventory_is_enforced(self):
+        identity = {**TEST_IDENTITY, "required_source_paths": ["share/source/missing.tar.gz"]}
+        with self.assertRaisesRegex(ValueError, "required source"):
+            _validate_release(self.release, identity=identity)
 
 
 if __name__ == "__main__":
