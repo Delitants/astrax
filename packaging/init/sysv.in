@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) Delitants
 ### BEGIN INIT INFO
 # Provides:          astrax
 # Required-Start:    $network

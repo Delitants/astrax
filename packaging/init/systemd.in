@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) Delitants
 [Unit]
 Description=AstraX streaming server
 After=network-online.target

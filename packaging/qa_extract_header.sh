@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) Delitants
 set -eu
 
 ASTRAX_PAYLOAD_SHA256='@PAYLOAD_SHA@'

@@ -1,4 +1,6 @@
 #!/sbin/openrc-run
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) Delitants
 description="AstraX streaming server"
 command="/opt/astrax/astrax"
 command_args="--config /var/lib/astrax/astrax-config.json"
