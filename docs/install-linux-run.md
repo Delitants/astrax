@@ -7,11 +7,13 @@ Build input is a finalized release directory containing `STATUS.json`,
 `MANIFEST.json`, `astrax`, `lib/libastrax_srt.so.1` pointing to its pinned
 versioned library, and nonempty `share/notices/` and `share/source/` trees.
 Every regular file must appear in the manifest with its SHA-256, size and mode.
-The builder refuses a release unless `distribution_cleared` and
-`candidate_qualified` are true and `source_closure` and `notice_closure` are
-`complete`. It pins the frozen executable, private SRT library, source commit
-and AstraX source archive hashes, and requires the listed source/notice inputs
-in `packaging/build_run.py`. This is an identity/inventory gate, not a legal
+The builder refuses a release unless `distribution_cleared`,
+`publication_cleared` and `candidate_qualified` are true and
+`source_closure` and `notice_closure` are `complete`. It pins the frozen
+executable, private SRT library, source commit and every required build-source
+input to independent SHA-256 values, including the recipient rebuild script,
+source manifest and SRT source descriptor. It requires the listed notice
+inputs in `packaging/build_run.py`. This is an identity/inventory gate, not a legal
 opinion about the sufficiency of the final notices. It also refuses draft
 files and the old `bin/astrax` layout,
 which breaks this executable's `$ORIGIN/lib` lookup.
@@ -40,6 +42,9 @@ origin. On the recipient Linux host, compare the published digest before
 running anything, then use `./astrax-linux-amd64.run --verify` and, if
 desired, `--extract /new/empty/path` to inspect files without root.
 
+The first distributable target is **Ubuntu 24.04 amd64 with systemd only**.
+The release builder pins that target in `STATUS.json` and the `.run` rejects
+other distributions or init systems before installation and activation.
 The installer needs Linux x86-64, glibc 2.38 or newer, a C++ runtime with
 `GLIBCXX_3.4.32`, OpenSSL 3 (`libcrypto.so.3`), and the frozen ELF's loader
 and other system libraries. It checks these before writing persistent files.
@@ -63,9 +68,9 @@ the management UI. A new config is created by AstraX on first start under
 `/var/lib/astrax/astrax-config.json`; configure exposure according to your
 network policy before allowing external access.
 
-Systemd uses `/etc/systemd/system/astrax.service`; OpenRC and SysV use
-`/etc/init.d/astrax`. Only systemd and OpenRC templates configure native
-restart-on-failure. Plain SysV has no automatic crash restart. The service
+Systemd uses `/etc/systemd/system/astrax.service`. OpenRC and SysV templates
+remain in source for future qualification, but are not supported by the first
+distributable `.run`. The service
 account joins an existing `video` group when created; other DVB device ACLs
 must be configured separately. `--install` never opens DVB devices.
 

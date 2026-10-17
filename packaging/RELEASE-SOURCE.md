@@ -9,7 +9,9 @@ verification, but a manager-driven lifecycle test remains pending. An
 isolated SysV manual start/status/HTTP/stop test passed without boot testing;
 OpenRC installation used only a synthetic init marker. Neither OpenRC nor
 SysV is a qualified first-release target. The installer source retains both
-templates for future validation; do not advertise them as supported yet.
+templates for future validation; the public builder pins Ubuntu 24.04/systemd
+and the distributable `.run` rejects other targets at install and activation.
+Do not advertise OpenRC or SysV as supported yet.
 No binary publication or production deployment is authorized by this scope.
 
 The self-extracting `.run` includes shell code from `installer_header.sh`,

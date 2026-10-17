@@ -17,8 +17,10 @@ TEST_IDENTITY = {
     "source_commit": "synthetic",
     "source_sha256": hashlib.sha256(b"Synthetic source\n").hexdigest(),
     "source_path": "share/source/README.txt",
-    "required_source_paths": ["share/source/README.txt"],
+    "required_source_paths": ["share/source/README.txt", "share/source/dependency.tar.gz"],
+    "required_source_sha256": {"share/source/dependency.tar.gz": hashlib.sha256(b"Synthetic dependency\n").hexdigest()},
     "required_notice_paths": ["share/notices/THIRD-PARTY.txt"],
+    "target_profile": "ubuntu-24.04-amd64-systemd",
 }
 
 
@@ -37,6 +39,7 @@ def make_release(root: Path, *, cleared: bool = True, publication: bool | None =
         "lib/libastrax_srt.so.1.4.0": b"\x7fELFsynthetic-srt",
         "share/notices/THIRD-PARTY.txt": b"Synthetic notice\n",
         "share/source/README.txt": b"Synthetic source\n",
+        "share/source/dependency.tar.gz": b"Synthetic dependency\n",
     }
     status = {
         "distribution_cleared": cleared,
@@ -47,6 +50,7 @@ def make_release(root: Path, *, cleared: bool = True, publication: bool | None =
         "source_closure": "complete",
         "notice_closure": "complete",
         "source_commit": "synthetic",
+        "target_profile": "ubuntu-24.04-amd64-systemd",
     }
     files["STATUS.json"] = (json.dumps(status, sort_keys=True) + "\n").encode()
     for name, contents in files.items():
@@ -203,6 +207,46 @@ class ReleaseGateTests(unittest.TestCase):
         identity = {**TEST_IDENTITY, "required_source_paths": ["share/source/missing.tar.gz"]}
         with self.assertRaisesRegex(ValueError, "required source"):
             _validate_release(self.release, identity=identity)
+
+    def test_required_rebuild_recipe_is_enforced(self):
+        identity = {
+            **TEST_IDENTITY,
+            "required_source_paths": TEST_IDENTITY["required_source_paths"] + ["share/build/recipient_build.py"],
+            "required_source_sha256": {
+                **TEST_IDENTITY["required_source_sha256"],
+                "share/build/recipient_build.py": hashlib.sha256(b"recipe").hexdigest(),
+            },
+        }
+        with self.assertRaisesRegex(ValueError, "required source inventory missing"):
+            _validate_release(self.release, identity=identity)
+
+    def test_source_replacement_with_updated_manifest_is_refused(self):
+        changed = b"Different synthetic source\n"
+        source = self.release / "share/source/dependency.tar.gz"
+        source.write_bytes(changed)
+        manifest_path = self.release / "MANIFEST.json"
+        manifest = json.loads(manifest_path.read_text())
+        entry = next(item for item in manifest["files"] if item["path"] == "share/source/dependency.tar.gz")
+        entry["sha256"] = hashlib.sha256(changed).hexdigest()
+        entry["size"] = len(changed)
+        manifest_path.write_text(json.dumps(manifest) + "\n")
+        with self.assertRaisesRegex(ValueError, "approved source input"):
+            validate_release(self.release)
+
+    def test_public_target_profile_is_pinned(self):
+        status_path = self.release / "STATUS.json"
+        status = json.loads(status_path.read_text())
+        status["target_profile"] = "ubuntu-24.04-amd64-openrc"
+        raw = (json.dumps(status) + "\n").encode()
+        status_path.write_bytes(raw)
+        manifest_path = self.release / "MANIFEST.json"
+        manifest = json.loads(manifest_path.read_text())
+        entry = next(item for item in manifest["files"] if item["path"] == "STATUS.json")
+        entry["sha256"] = hashlib.sha256(raw).hexdigest()
+        entry["size"] = len(raw)
+        manifest_path.write_text(json.dumps(manifest) + "\n")
+        with self.assertRaisesRegex(ValueError, "target profile"):
+            validate_release(self.release)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ set -eu
 
 ASTRAX_PAYLOAD_SHA256='@PAYLOAD_SHA@'
 ASTRAX_PRIVATE_INSTALL_QA='@PRIVATE_INSTALL_QA@'
+ASTRAX_RELEASE_TARGET='@RELEASE_TARGET@'
 ASTRAX_EXPECTED_MEMBERS='@MEMBERS@'
 ASTRAX_EXPECTED_TYPES='@TYPES@'
 ASTRAX_EXPECTED_HASHES='@HASHES@'
@@ -94,7 +95,7 @@ case $mode in
         printf '%s\n' "$ASTRAX_SYSTEMD_TEMPLATE" > "$work/init/systemd.in"
         printf '%s\n' "$ASTRAX_OPENRC_TEMPLATE" > "$work/init/openrc.in"
         printf '%s\n' "$ASTRAX_SYSV_TEMPLATE" > "$work/init/sysv.in"
-        ASTRAX_TEMPLATE_DIR="$work/init" sh "$work/installer_core.sh" "$mode" "$work/release"
+        ASTRAX_RELEASE_TARGET="$ASTRAX_RELEASE_TARGET" ASTRAX_TEMPLATE_DIR="$work/init" sh "$work/installer_core.sh" "$mode" "$work/release"
         exit $? ;;
 esac
 

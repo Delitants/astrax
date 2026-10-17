@@ -95,6 +95,22 @@ astrax_service_path() {
     fi
 }
 
+astrax_check_release_target() {
+    root=$1
+    init=$2
+    case ${ASTRAX_RELEASE_TARGET:-} in
+        '') return 0 ;;
+        ubuntu-24.04-amd64-systemd)
+            [ "$init" = systemd ] && [ -f "$root/etc/os-release" ] &&
+                grep -Eq '^ID="?ubuntu"?$' "$root/etc/os-release" &&
+                grep -Eq '^VERSION_ID="?24\.04"?$' "$root/etc/os-release" || {
+                    echo 'Ubuntu 24.04 amd64 with systemd required for this release' >&2
+                    return 1
+                } ;;
+        *) echo 'unsupported release target' >&2; return 1 ;;
+    esac
+}
+
 astrax_preflight() {
     root=$1
     payload=$2
@@ -104,6 +120,7 @@ astrax_preflight() {
     }
     astrax_check_abi "$root" || return 1
     init=$(astrax_detect_init "$root") || return 1
+    astrax_check_release_target "$root" "$init" || return 1
     service=$(astrax_service_path "$root" "$init")
     for path in "$root/opt/astrax" "$root/var/lib/astrax" \
         "$root/etc/systemd/system/astrax.service" "$root/etc/init.d/astrax"; do
@@ -168,7 +185,12 @@ astrax_install() {
     elif [ ! -f "$astrax_root/qa/video-group" ]; then
         echo 'video group absent; configure DVB device access separately' >&2
     fi
-    mkdir -p "$astrax_root/var/lib/astrax" || return 1
+    mkdir -p "$astrax_root/var/lib" || return 1
+    if [ "$astrax_root" != / ] && [ "${ASTRAX_TEST_RACE_CREATE_STATE:-}" = 1 ]; then
+        mkdir "$astrax_root/var/lib/astrax" || return 1
+        printf 'keep me' > "$astrax_root/var/lib/astrax/preexisting"
+    fi
+    mkdir "$astrax_root/var/lib/astrax" || return 1
     astrax_created_state=1
     chmod 700 "$astrax_root/var/lib/astrax" || return 1
     if [ "$astrax_root" = / ]; then chown astrax:astrax "$astrax_root/var/lib/astrax" || return 1; fi
@@ -270,6 +292,7 @@ astrax_activate() {
     [ "$root" != / ] || [ "$(id -u)" -eq 0 ] || { echo 'root required' >&2; return 1; }
     astrax_check_abi "$root" || return 1
     init=$(astrax_detect_init "$root") || return 1
+    astrax_check_release_target "$root" "$init" || return 1
     service=$(astrax_service_path "$root" "$init")
     template_dir=${ASTRAX_TEMPLATE_DIR:-}
     [ -f "$template_dir/$init.in" ] && [ -f "$service" ] || { echo 'service definition missing' >&2; return 1; }

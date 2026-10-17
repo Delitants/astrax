@@ -56,6 +56,8 @@ class InstallerHeaderTests(unittest.TestCase):
         self.installer.write_bytes(header + MARKER + forged)
 
     def test_verify_and_extract_without_execution(self):
+        header = self.installer.read_bytes().split(MARKER, 1)[0]
+        self.assertIn(b"ASTRAX_RELEASE_TARGET='ubuntu-24.04-amd64-systemd'", header)
         self.assertEqual(self.run_installer("--help").returncode, 0)
         self.assertEqual(self.run_installer("--verify").returncode, 0)
         destination = self.base / "extracted"
@@ -89,6 +91,7 @@ class InstallerHeaderTests(unittest.TestCase):
         builder.build_private_install_qa_run(held, qa_run, identity=TEST_IDENTITY)
         header = qa_run.read_bytes().split(MARKER, 1)[0]
         self.assertIn(b"astrax_install", header)
+        self.assertIn(b"ASTRAX_RELEASE_TARGET=''", header)
         self.assertEqual(stat.S_IMODE(qa_run.stat().st_mode), 0o600)
         self.assertEqual(subprocess.run(["sh", str(qa_run), "--verify"], capture_output=True).returncode, 0)
         rejected_install = subprocess.run(["sh", str(qa_run), "--install"], text=True, capture_output=True)
@@ -361,6 +364,34 @@ class InstallerCoreTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((self.root / "opt/astrax/preexisting").read_text(), "keep me")
         self.assertFalse((self.root / "etc/systemd/system/astrax.service").exists())
+
+    def test_raced_state_directory_is_preserved(self):
+        self.configure_init("systemd")
+        result = self.run_core("astrax_install", extra_env={"ASTRAX_TEST_RACE_CREATE_STATE": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.root / "var/lib/astrax/preexisting").read_text(), "keep me")
+        self.assertFalse((self.root / "opt/astrax").exists())
+
+    def test_release_target_rejects_other_distro_or_init_before_install_and_activation(self):
+        profile = {"ASTRAX_RELEASE_TARGET": "ubuntu-24.04-amd64-systemd"}
+        self.configure_init("systemd")
+        os_release = self.root / "etc/os-release"
+        os_release.parent.mkdir(parents=True)
+        os_release.write_text('ID=debian\nVERSION_ID="12"\n')
+        rejected = self.run_core("astrax_install", extra_env=profile)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertFalse((self.root / "opt/astrax").exists())
+        os_release.write_text('ID=ubuntu\nVERSION_ID="24.04"\n')
+        self.assertEqual(self.run_core("astrax_install", extra_env=profile).returncode, 0)
+        os_release.write_text('ID=debian\nVERSION_ID="12"\n')
+        rejected = self.run_core("astrax_activate", extra_env=profile)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertFalse((self.root / "qa/service-actions").exists())
+        os_release.write_text('ID=ubuntu\nVERSION_ID="24.04"\n')
+        self.configure_init("openrc")
+        rejected = self.run_core("astrax_activate", extra_env=profile)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertFalse((self.root / "qa/service-actions").exists())
 
     def test_service_stage_failure_leaves_no_partial_service(self):
         self.configure_init("systemd")

@@ -21,16 +21,33 @@ APPROVED_IDENTITY = {
     "source_commit": "6544bd0d2f5abab0654b35078d7279d5e026cd9d",
     "source_sha256": "515781316a1626840e8a4ae08dbea3d2993442f3ccfbe23ee3a2214a629f3038",
     "source_path": "share/source/source/astrax-6544bd0-source.tar.gz",
+    "target_profile": "ubuntu-24.04-amd64-systemd",
     "required_source_paths": [
+        "share/source/manifest.json",
+        "share/build/recipient_build.py",
         "share/source/source/astrax-6544bd0-source.tar.gz",
         "share/source/source/go1.26.9.src.tar.gz",
         "share/source/source/golang.org_x_text_v0.37.0.zip",
         "share/source/source/libdvbcsa-1.1.0.tar.gz",
         "share/source/source/srt_1.4.0.orig.tar.gz",
         "share/source/source/srt_1.4.0-1build1.debian.tar.xz",
+        "share/source/source/srt_1.4.0-1build1.dsc",
         "share/source/patches/guard.patch",
         "share/source/patches/001-multiarch-rpath.patch",
     ],
+    "required_source_sha256": {
+        "share/source/manifest.json": "85ae036efdfe9fe267d6eab8fff5dbb8fb96cb684b4cce34402c05ed6003a838",
+        "share/build/recipient_build.py": "0ad25b45fb9f8ff02ed9c1caa0284be76456c229318c703c748b28dd14e881df",
+        "share/source/source/astrax-6544bd0-source.tar.gz": "515781316a1626840e8a4ae08dbea3d2993442f3ccfbe23ee3a2214a629f3038",
+        "share/source/source/go1.26.9.src.tar.gz": "9735d7dcdb65b35d3fa577f04064737c03b89cf1a2b71e6e69fe2f3c6f9fd4ca",
+        "share/source/source/golang.org_x_text_v0.37.0.zip": "b8d475c17835ab602b91f1147684ceb5dbf4060e72e5dfb2e0e33efc9312a982",
+        "share/source/source/libdvbcsa-1.1.0.tar.gz": "4db78af5cdb2641dfb1136fe3531960a477c9e3e3b6ba19a2754d046af3f456d",
+        "share/source/source/srt_1.4.0.orig.tar.gz": "c2ba0bb9382ab42f9eebac831dc021e7da26b2971aaeb30a891dd24297bd929c",
+        "share/source/source/srt_1.4.0-1build1.debian.tar.xz": "849199cd57d93ca8fecc2b0ef26f89d4b9e341ce74262ed09acaf72c9471957e",
+        "share/source/source/srt_1.4.0-1build1.dsc": "873634cd5ef1cd25e68bf54e14b7b548cf48050b5796f6d9eed24d9ed08530e2",
+        "share/source/patches/guard.patch": "7cd257cbba314c52ba471b07519c10a2d49353e5a1a80cee5f99971a7a2a73cc",
+        "share/source/patches/001-multiarch-rpath.patch": "9c070324f16bb9a7ab2d1a2032ddb31eefb6b17d32d2900af16aea2a91f2c1d5",
+    },
     "required_notice_paths": [
         "share/notices/THIRD-PARTY-NOTICES.txt",
         "share/notices/MPL-2.0.txt",
@@ -84,6 +101,8 @@ def validate_release(
         for field in ("source_closure", "notice_closure"):
             if status.get(field) != "complete":
                 raise ValueError(f"{field} must be complete")
+        if status.get("target_profile") != identity["target_profile"]:
+            raise ValueError("approved target profile mismatch")
 
     manifest = json.loads((release_dir / "MANIFEST.json").read_text())
     if manifest.get("schema") != 1 or not isinstance(manifest.get("files"), list):
@@ -136,6 +155,12 @@ def validate_release(
         missing = set(identity[field]) - names
         if missing:
             raise ValueError(f"{label} inventory missing: {sorted(missing)}")
+    source_pins = identity["required_source_sha256"]
+    if set(identity["required_source_paths"]) != set(source_pins) | {identity["source_path"]}:
+        raise ValueError("required source pin inventory mismatch")
+    for path, expected in source_pins.items():
+        if by_name.get(path) != expected:
+            raise ValueError(f"approved source input hash mismatch: {path}")
 
     observed: set[str] = set()
     for path in release_dir.rglob("*"):
@@ -233,6 +258,7 @@ def _build_run(
         header = header.replace("@TYPES@", "\n".join("l" if name == SONAME else "-" for name in members))
         header = header.replace("@HASHES@", "\n".join(f"{name}:{hashes[name]}" for name in members if name != SONAME))
         header = header.replace("@PRIVATE_INSTALL_QA@", "1" if private_install_qa else "0")
+        header = header.replace("@RELEASE_TARGET@", "" if private_install_qa else (identity or APPROVED_IDENTITY)["target_profile"])
         if not qa_only:
             for init, contents in templates.items():
                 header = header.replace(f"@{init.upper()}@", contents.replace("'", "'\"'\"'"))
