@@ -1,8 +1,11 @@
+import argparse
 import gzip
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import stat
 import tarfile
 import tempfile
@@ -128,3 +131,43 @@ def build_payload(release_dir: Path, output: Path) -> Path:
         if os.path.exists(staged):
             os.unlink(staged)
     return output
+
+
+def build_run(release_dir: Path, output: Path) -> Path:
+    release_dir, output = Path(release_dir), Path(output)
+    manifest = validate_release(release_dir)
+    members = sorted(["MANIFEST.json", SONAME] + [entry["path"] for entry in manifest["files"]])
+    for name in members:
+        if not re.fullmatch(r"[A-Za-z0-9_./+-]+", name):
+            raise ValueError(f"unsupported archive name: {name}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    header = Path(__file__).with_name("installer_header.sh").read_text()
+    core_path = Path(__file__).with_name("installer_core.sh")
+    core = core_path.read_text() if core_path.exists() else ""
+    with tempfile.TemporaryDirectory(dir=output.parent) as scratch:
+        payload = build_payload(release_dir, Path(scratch) / "payload.tar.gz")
+        digest = _hash_file(payload)
+        header = header.replace("@PAYLOAD_SHA@", digest).replace("@MEMBERS@", "\n".join(members))
+        header = header.replace("@CORE@", core.replace("'", "'\"'\"'"))
+        fd, staged = tempfile.mkstemp(prefix=f".{output.name}.", dir=output.parent)
+        try:
+            with os.fdopen(fd, "wb") as stream, payload.open("rb") as source:
+                stream.write(header.encode())
+                shutil.copyfileobj(source, stream)
+            os.chmod(staged, 0o755)
+            os.replace(staged, output)
+        finally:
+            if os.path.exists(staged):
+                os.unlink(staged)
+    return output
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Build the offline AstraX Linux installer")
+    parser.add_argument("--release-dir", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    args = parser.parse_args()
+    try:
+        print(build_run(args.release_dir, args.output))
+    except (OSError, ValueError) as exc:
+        parser.exit(1, f"release refused: {exc}\n")
