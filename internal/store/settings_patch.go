@@ -27,7 +27,7 @@ func (s *Store) PatchSettings(fields map[string]json.RawMessage) (model.Settings
 func applySettingsPatch(in model.Settings, fields map[string]json.RawMessage) (model.Settings, error) {
 	for name, value := range fields {
 		switch name {
-		case "http_play_port", "srt_play_port", "playlist_name", "control_listen",
+		case "http_play_port", "http_play_loopback", "srt_play_port", "playlist_name", "control_listen",
 			"control_listen_https", "redirect_https", "tls_min_version", "log_level",
 			"epg_enabled", "epg_source_urls", "epg_from_dvb", "epg_dvb_interval_sec",
 			"epg_dvb_depth", "epg_dvb_priority", "epg_local_path", "epg_source_retention_hours", "epg_max_source_mib", "epg_source_timeout_sec", "epg_max_programmes":

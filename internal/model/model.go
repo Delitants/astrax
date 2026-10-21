@@ -58,6 +58,7 @@ type DVBSignal struct {
 type Settings struct {
 	ExternalAPI             ExternalAPISettings `json:"external_api,omitzero"`
 	HTTPPlayPort            int                 `json:"http_play_port"`
+	HTTPPlayLoopback        bool                `json:"http_play_loopback,omitempty"`
 	SRTPlayPort             int                 `json:"srt_play_port"`
 	HTTPAllowAll            bool                `json:"http_allow_all"`
 	DisableTLS              bool                `json:"disable_tls"`

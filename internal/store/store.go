@@ -2087,6 +2087,7 @@ func (s *Store) setSettings(in model.Settings, patch map[string]json.RawMessage)
 	needsRetentionUpdate := existing.EPGSourceRetentionHours != in.EPGSourceRetentionHours
 	previous := existing
 	existing.HTTPPlayPort = in.HTTPPlayPort
+	existing.HTTPPlayLoopback = in.HTTPPlayLoopback
 	existing.SRTPlayPort = in.SRTPlayPort
 	existing.PlaylistName = in.PlaylistName
 	existing.ControlListen = in.ControlListen

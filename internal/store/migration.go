@@ -50,6 +50,9 @@ func loadConfig(path string, now time.Time) (model.Config, migrationResult, erro
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return model.Config{}, migrationResult{}, fmt.Errorf("parse config: %w", err)
 	}
+	if cfg.Settings.HTTPPlayLoopback && (cfg.Settings.HTTPPlayPort < 1 || cfg.Settings.HTTPPlayPort > 65535) {
+		return model.Config{}, migrationResult{}, fmt.Errorf("http_play_port must be between 1 and 65535 for loopback playback")
+	}
 	// Absence is a legacy default; explicit zero/null must not silently acquire
 	// a different retention policy during load-time normalization.
 	var present struct {

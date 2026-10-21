@@ -192,14 +192,28 @@ func (st *Streamer) Start() error {
 	st.mu.Unlock()
 
 	port := st.settings.HTTPPlayPort
+	if st.settings.HTTPPlayLoopback && (port < 1 || port > 65535) {
+		st.mu.Lock()
+		st.startPending = false
+		st.mu.Unlock()
+		return fmt.Errorf("loopback playback requires an exact port between 1 and 65535")
+	}
 	if port <= 0 {
 		port = 8000
 	}
 	var listener net.Listener
 	var lastErr error
-	for offset := 0; offset < 10; offset++ {
+	attempts := 10
+	if st.settings.HTTPPlayLoopback {
+		attempts = 1
+	}
+	for offset := 0; offset < attempts; offset++ {
 		tryPort := port + offset
-		candidate, listenErr := st.deps.listenTCP("tcp", fmt.Sprintf(":%d", tryPort))
+		address := fmt.Sprintf(":%d", tryPort)
+		if st.settings.HTTPPlayLoopback {
+			address = fmt.Sprintf("127.0.0.1:%d", tryPort)
+		}
+		candidate, listenErr := st.deps.listenTCP("tcp", address)
 		if listenErr == nil && candidate != nil {
 			listener = candidate
 			break
@@ -230,7 +244,7 @@ func (st *Streamer) Start() error {
 		st.mu.Lock()
 		st.startPending = false
 		st.mu.Unlock()
-		return fmt.Errorf("streamer could not bind to any port in range %d-%d: %w", port, port+9, lastErr)
+		return fmt.Errorf("streamer could not bind to any port in range %d-%d: %w", port, port+attempts-1, lastErr)
 	}
 
 	st.mu.Lock()
