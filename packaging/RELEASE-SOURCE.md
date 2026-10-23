@@ -60,15 +60,17 @@ can verify their exact local ZIP, `.mod`, and `.info` inputs against pinned
 SHA-256 values, the source `go.mod` and `go.sum`, and each ZIP's `LICENSE` and
 `PATENTS` notices, then
 populate a file-only Go module proxy. It rejects an incomplete auth module set.
-The new source archive and held stage manifest are pinned to commit `f9545f6`.
+The current held source archive and stage manifest are pinned to commit
+`b3d91c9`, including the management SSE and settings-admission corrections.
 They do not change the published preview binary or its release identity.
 An isolated Linux amd64 build produced a held first-production candidate, and
 one private-loopback setup/auth/restart smoke passed. Exact-v3 synthetic
 browser composition also passed one Playwright attempt. A later source review
 identified management SSE revocation and save-then-restart admission defects,
-so this held ELF is not the final production candidate. Source/notice closure,
-full-suite and installed-service QA, live admission, and a rebuild after those
-fixes remain separate gates.
+so this held ELF is not the final production candidate. The corrected source
+has passed an offline Mac compile-only check but has not been built for Linux.
+Source/notice closure, full-suite and installed-service QA, live admission,
+and a rebuild after those fixes remain separate gates.
 
 ## Held first-production candidate (not an installer identity)
 

@@ -19,10 +19,10 @@ import tarfile
 import zipfile
 
 
-SOURCE_COMMIT = "f9545f6f3d00028f461755ad26f934af20f0583e"
-MANIFEST_SHA256 = "0b6fb02bb2ab231f814c700e988fd79cb65758fd5083b2cc41f6c6c38e87e8da"
+SOURCE_COMMIT = "b3d91c9a90a4db42a7d1a3873f270725b49536a4"
+MANIFEST_SHA256 = "4d90a586297beebcac7084c38fcf66ea362685deb2588c4d5c9374365c57dd18"
 PINS = {
-    "source/astrax-f9545f6f3d00-source.tar.gz": "7d6548dd2c5e9488a86b1c9d9f3ec1a0c6c429143ba72ff846109c01b2558618",
+    "source/astrax-b3d91c9a90a4-source.tar.gz": "d10decb277a565ca30ef728860d682f5cf13e72d5e304545d7dec999ec0b3700",
     "source/srt_1.4.0.orig.tar.gz": "c2ba0bb9382ab42f9eebac831dc021e7da26b2971aaeb30a891dd24297bd929c",
     "source/srt_1.4.0-1build1.debian.tar.xz": "849199cd57d93ca8fecc2b0ef26f89d4b9e341ce74262ed09acaf72c9471957e",
     "source/srt_1.4.0-1build1.dsc": "873634cd5ef1cd25e68bf54e14b7b548cf48050b5796f6d9eed24d9ed08530e2",
@@ -32,7 +32,7 @@ PINS = {
     "source/golang.org_x_text_v0.41.0.zip": "e63f35daaae749d0ffff97a295ad8f4837a662938a46b7a87f18a88e85a5cbf9",
     "patches/guard.patch": "7cd257cbba314c52ba471b07519c10a2d49353e5a1a80cee5f99971a7a2a73cc",
 }
-SOURCE_ARCHIVE = "source/astrax-f9545f6f3d00-source.tar.gz"
+SOURCE_ARCHIVE = "source/astrax-b3d91c9a90a4-source.tar.gz"
 CONGCTL_ORIGINAL_SHA256 = "bebbabadb6c1b8c96dc02d96d6185159afedd2d3bff1208382c51375f1ed5033"
 CONGCTL_GUARDED_SHA256 = "c40fd0f7e0e1fd39486b77fd561f0d470e3e875b14af2acf9e53683a3ec09481"
 AUTH_MODULE_PINS = {
