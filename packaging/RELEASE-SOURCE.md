@@ -28,7 +28,7 @@ the corresponding source package for the frozen Linux executable.
 The published preview executable was built from AstraX source commit `6544bd0`.
 It does not contain the new management authentication. The current
 `recipient_build.py` is instead pinned to the held source-only stage for
-commit `b3d91c9a90a4db42a7d1a3873f270725b49536a4` (three offline Go
+commit `3e3b81102b01cb751b2e6d1cf64f6ffe00fa4f9e` (three offline Go
 modules). This is a source-stage pin, not a qualified installer identity.
 It offers two non-serving build modes: `--output` retains the private QA preflight, while
 `--recipient-output` can run as an ordinary non-root user on Linux amd64.
@@ -49,7 +49,7 @@ The output directory must not exist and remains private to the invoking
 user. A rebuild need not match a prior ELF byte for byte; compare its source,
 build metadata, ABI, and behavior instead. The earlier `f9545f6` stage
 produced a held binary in an isolated Linux amd64 build and passed local hash
-and archive checks. The current `b3d91c9` source stage has not been built for
+and archive checks. The current `3e3b811` source stage has not been built for
 Linux. Do not relabel or modify a held layout in place to imply distribution
 readiness.
 
@@ -63,10 +63,10 @@ SHA-256 values, the source `go.mod` and `go.sum`, and each ZIP's `LICENSE` and
 `PATENTS` notices, then
 populate a file-only Go module proxy. It rejects an incomplete auth module set.
 The current held source archive and stage manifest are pinned to commit
-`b3d91c9`, which contains the initial management SSE and settings-admission
-work. Later review identified additional SSE revocation, listener-collision,
-certificate-custody, and HTTPS-default fixes; those local changes are not in
-this archive and require a new source freeze.
+`3e3b811`. Its application archive includes the management SSE revocation,
+listener-collision, certificate-custody, and HTTPS-default fixes. The commit
+also contains the installer account-admission fix, which must be supplied
+separately as matching installer source in a future recipient layout.
 They do not change the published preview binary or its release identity.
 An isolated Linux amd64 build produced a held first-production candidate, and
 one private-loopback setup/auth/restart smoke passed. Exact-v3 synthetic

@@ -16,13 +16,13 @@ from packaging import recipient_build
 class RecipientBuildModeTests(TestCase):
     def test_current_source_stage_is_the_only_default_recipe_identity(self):
         self.assertEqual(recipient_build.SOURCE_COMMIT,
-                         "b3d91c9a90a4db42a7d1a3873f270725b49536a4")
+                         "3e3b81102b01cb751b2e6d1cf64f6ffe00fa4f9e")
         self.assertEqual(recipient_build.MANIFEST_SHA256,
-                         "4d90a586297beebcac7084c38fcf66ea362685deb2588c4d5c9374365c57dd18")
+                         "49c3d2f00e3f5f583f620368673a0bb3c106d4c865f2a5fbbeb4af2eb42c8ae4")
         self.assertEqual(recipient_build.SOURCE_ARCHIVE,
-                         "source/astrax-b3d91c9a90a4-source.tar.gz")
+                         "source/astrax-3e3b81102b01-source.tar.gz")
         self.assertEqual(recipient_build.PINS[recipient_build.SOURCE_ARCHIVE],
-                         "d10decb277a565ca30ef728860d682f5cf13e72d5e304545d7dec999ec0b3700")
+                         "4d682f1264c279bad5c1f1eadd8a324347e5f5afafc69b09d26a21bb8a42c656")
         for module, spec in recipient_build.AUTH_MODULE_PINS.items():
             archive = f"source/{module.replace('/', '_')}_{spec['version']}.zip"
             self.assertEqual(recipient_build.PINS[archive], spec["sha256"]["zip"])
