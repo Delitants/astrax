@@ -65,19 +65,22 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertTrue(guard.existing_release_errors([{"name": "unexpected.log"}]))
 
     def test_history_blocks_code_inside_private_document_directory(self):
-        with patch.object(guard, "git", return_value=b"docs/internal/notes.py\0"), patch.object(
-            guard, "exists_at", return_value=True
-        ):
-            errors = guard.changed_errors(self.root, {"baseline": "base"}, "head")
-        self.assertEqual(
-            ["docs/internal/notes.py: local-only directory"], errors
-        )
+        for name in ("docs/internal/notes.py", "internal/.internal/notes.py", "internal/._internal/notes.py"):
+            with patch.object(guard, "git", return_value=(name + "\0").encode()), patch.object(
+                guard, "exists_at", return_value=True
+            ):
+                errors = guard.changed_errors(self.root, {"baseline": "base"}, "head")
+            self.assertEqual([name + ": local-only directory"], errors)
 
     def test_top_level_application_internal_source_remains_allowed(self):
         self.assertIsNone(guard.private_error("internal/dvb/adapter.go"))
         self.assertIsNone(guard.private_error("internal/csa/internal/csatest/oracle.go"))
         self.assertIsNone(guard.private_error("internal/httpapi/openapi.json"))
-        for name in ("tools/internal/notes.py", ".internal/notes.py", "._internal/notes.py", "docs/internal/openapi.json"):
+        for name in (
+            "tools/internal/notes.py", ".internal/notes.py", "._internal/notes.py",
+            "docs/internal/openapi.json", "internal/.internal/notes.py",
+            "internal/._internal/notes.py",
+        ):
             self.assertEqual("local-only directory", guard.private_error(name))
 
 
