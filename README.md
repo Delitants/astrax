@@ -8,11 +8,13 @@ The source passed isolated QA at the identified development commit; that does no
 
 ## Linux installer scope
 
-The first `.run` release targets Ubuntu 24.04 amd64 with systemd only. Its
-binary publication is approved separately from installation or production
-activation. See the release asset and its SHA-256 on the GitHub Releases page
-when available; this source snapshot alone is not the corresponding-source
-package for the frozen executable. The installer payload includes that source.
+The planned first production `.run` targets Ubuntu 24.04 amd64 with systemd
+only. The existing public preview is not that release. Publication of a new
+binary, installation and production activation require separate approvals.
+When a production release is available, verify its asset and SHA-256 on the
+GitHub Releases page; this repository alone is not the corresponding-source
+package for a separately built executable. The installer payload must include
+its exact corresponding source and notices.
 OpenRC and SysV templates remain in the source, but their boot and service
 lifecycles are not qualified as supported release targets. The exact systemd
 unit passed static verification; manager-driven lifecycle acceptance remains

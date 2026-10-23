@@ -29,10 +29,21 @@ service, and it refuses an existing installation instead of replacing it.
 
 ## Build and inspect
 
-After the release gate is cleared, build offline with:
+After the release gate is cleared, verify the exact reviewed release manifest
+and `CANDIDATE-IDENTITY.json` against their separately published SHA-256 values.
+The command-line builder's default identity belongs to the older preview;
+build a new candidate through the Python API with its reviewed identity:
 
 ```sh
-python3 packaging/build_run.py --release-dir /path/to/final-release --output astrax-linux-amd64.run
+python3 - <<'PY'
+import json
+from pathlib import Path
+from packaging.build_run import build_run
+
+release = Path('/path/to/final-release')
+identity = json.loads((release / 'CANDIDATE-IDENTITY.json').read_text())
+print(build_run(release, Path('astrax-linux-amd64.run'), identity=identity))
+PY
 sha256sum astrax-linux-amd64.run
 ```
 
@@ -60,13 +71,19 @@ sudo ./astrax-linux-amd64.run --activate
 ```
 
 Installation alone leaves the service disabled and stopped. Activation is
-separate and may open the control UI. **The application source defaults its
-control listener to `0.0.0.0:8080`; do not activate on an untrusted network
-without restricting access first.** The installer does not create an admin
-password, change a firewall, or assume that an external API token protects
-the management UI. A new config is created by AstraX on first start under
-`/var/lib/astrax/astrax-config.json`; configure exposure according to your
-network policy before allowing external access.
+separate and starts it. Management defaults to `http://127.0.0.1:8080` on
+the host loopback interface, not a LAN wildcard. From a workstation, use a
+private tunnel such as `ssh -L 8080:127.0.0.1:8080 USER@HOST`, then open
+`http://127.0.0.1:8080`. On first start, AstraX creates an owner-only,
+one-time setup file at `/var/lib/astrax/astrax-config.json.admin-setup`.
+Read that file locally as root and enter its secret in the setup page to
+enroll an administrator password; the installer prints the path, never the
+secret. The setup file is removed after enrollment. Do not treat an external
+API token as management authentication. The installer does not change the
+firewall or make the management UI available on the LAN. To enable HTTPS,
+configure a concrete listener IP and a certificate valid for the intended
+browser address before restarting; the wildcard HTTPS default is not an
+admitted certificate-backed listener.
 
 Systemd uses `/etc/systemd/system/astrax.service`. OpenRC and SysV templates
 remain in source for future qualification, but are not supported by the first
