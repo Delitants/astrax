@@ -4,6 +4,7 @@
 """Build the pinned AstraX source offline for QA or a recipient; never run it."""
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -32,6 +33,38 @@ PINS = {
 SOURCE_ARCHIVE = "source/astrax-6544bd0-source.tar.gz"
 CONGCTL_ORIGINAL_SHA256 = "bebbabadb6c1b8c96dc02d96d6185159afedd2d3bff1208382c51375f1ed5033"
 CONGCTL_GUARDED_SHA256 = "c40fd0f7e0e1fd39486b77fd561f0d470e3e875b14af2acf9e53683a3ec09481"
+AUTH_MODULE_PINS = {
+    "golang.org/x/crypto": {
+        "version": "v0.55.0",
+        "sha256": {
+            "zip": "0660bba47b3643fe1beb1b97af93b6a4d2bf2ed069d9e52a2b1bdf6f17cf3e79",
+            "mod": "5eae01dcf016744fb3c97f482ee226dbf9ee780e2faf2890d5b3b37840fbd168",
+            "info": "0d9e60eabe2e015585684bc89f7f93626ae793dc6433509bed37d6f1010f293f",
+        },
+        "license_sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+        "patents_sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+    },
+    "golang.org/x/sys": {
+        "version": "v0.47.0",
+        "sha256": {
+            "zip": "cdac013ddced0262926ec29ffcda645da39670e61c7e5b761e572b6b1809bb1b",
+            "mod": "57f4393ea18d5446a12363b35c23a616d843fa1669c7121a70a2bc3a9677d665",
+            "info": "2f567627966f180616deee8874e9547fe34b2271f17ce14901979890510fc959",
+        },
+        "license_sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+        "patents_sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+    },
+    "golang.org/x/text": {
+        "version": "v0.41.0",
+        "sha256": {
+            "zip": "e63f35daaae749d0ffff97a295ad8f4837a662938a46b7a87f18a88e85a5cbf9",
+            "mod": "d9ed44f15d8656abad2642d0052ce966b8135f00c8f80c469d9e6940b49d5e0c",
+            "info": "770f4d64a885dfc36c283cf2d02b5f9d6d614de0ad2cd3fedd6a0e6c6f747c20",
+        },
+        "license_sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+        "patents_sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc",
+    },
+}
 
 
 class SourceBuildError(ValueError):
@@ -51,6 +84,77 @@ def _regular(path):
         return stat.S_ISREG(path.lstat().st_mode)
     except OSError:
         return False
+
+
+def _requires_module(go_mod_text, module, version):
+    pattern = rf"(?m)^\s*(?:require\s+)?{re.escape(module)}\s+{re.escape(version)}(?:\s|$)"
+    return re.search(pattern, go_mod_text) is not None
+
+
+def module_profile(go_mod):
+    text = Path(go_mod).read_text()
+    modern = all(_requires_module(text, module, spec["version"])
+                 for module, spec in AUTH_MODULE_PINS.items())
+    legacy = _requires_module(text, "golang.org/x/text", "v0.37.0")
+    if modern and not legacy:
+        return "auth"
+    if legacy and not any(name in text for name in ("golang.org/x/crypto", "golang.org/x/sys")):
+        return "legacy"
+    raise SourceBuildError("source go.mod has an unpinned module set")
+
+
+def stage_auth_module_proxy(source, proxy, go_mod, go_sum, *, specs=AUTH_MODULE_PINS):
+    """Verify pinned local module inputs before creating an offline Go proxy."""
+    source, proxy = Path(source), Path(proxy)
+    if proxy.exists() or proxy.is_symlink():
+        raise SourceBuildError("module proxy output already exists")
+    requirements = Path(go_mod).read_text()
+    checksums = set(Path(go_sum).read_text().splitlines())
+    verified = []
+    for module, spec in specs.items():
+        version = spec["version"]
+        if not _requires_module(requirements, module, version):
+            raise SourceBuildError(f"source go.mod lacks pinned module: {module}")
+        stem = f"{module.replace('/', '_')}_{version}"
+        inputs = {ext: source / f"{stem}.{ext}" for ext in ("zip", "mod", "info")}
+        for ext, path in inputs.items():
+            if not _regular(path) or _sha256(path) != spec["sha256"][ext]:
+                raise SourceBuildError(f"module source hash mismatch: {module} {ext}")
+        try:
+            info = json.loads(inputs["info"].read_text())
+            if info.get("Version") != version:
+                raise SourceBuildError(f"module version mismatch: {module}")
+            with zipfile.ZipFile(inputs["zip"]) as archive:
+                names = archive.namelist()
+                prefix = f"{module}@{version}/"
+                if (not names or len(names) != len(set(names)) or
+                        any(not name.startswith(prefix) or ".." in PurePosixPath(name).parts
+                            for name in names)):
+                    raise SourceBuildError(f"module ZIP paths invalid: {module}")
+                lines = [f"{hashlib.sha256(archive.read(name)).hexdigest()}  {name}\n"
+                         for name in sorted(names) if not name.endswith("/")]
+                if archive.read(prefix + "go.mod") != inputs["mod"].read_bytes():
+                    raise SourceBuildError(f"module go.mod mismatch: {module}")
+                if hashlib.sha256(archive.read(prefix + "LICENSE")).hexdigest() != spec["license_sha256"]:
+                    raise SourceBuildError(f"module LICENSE mismatch: {module}")
+                if hashlib.sha256(archive.read(prefix + "PATENTS")).hexdigest() != spec["patents_sha256"]:
+                    raise SourceBuildError(f"module PATENTS mismatch: {module}")
+        except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
+            if isinstance(exc, SourceBuildError):
+                raise
+            raise SourceBuildError(f"module source invalid: {module}") from exc
+        zip_h1 = "h1:" + base64.b64encode(hashlib.sha256("".join(lines).encode()).digest()).decode()
+        mod_line = f"{hashlib.sha256(inputs['mod'].read_bytes()).hexdigest()}  go.mod\n"
+        mod_h1 = "h1:" + base64.b64encode(hashlib.sha256(mod_line.encode()).digest()).decode()
+        if (f"{module} {version} {zip_h1}" not in checksums or
+                f"{module} {version}/go.mod {mod_h1}" not in checksums):
+            raise SourceBuildError(f"module go.sum mismatch: {module}")
+        verified.append((module, version, inputs))
+    for module, version, inputs in verified:
+        target = proxy / module / "@v"
+        target.mkdir(parents=True, exist_ok=True)
+        for ext, path in inputs.items():
+            shutil.copyfile(path, target / f"{version}.{ext}")
 
 
 def _check_source_archive(path, expected_count):
@@ -245,14 +349,20 @@ def build(stage, output, *, recipient=False, manifest_sha=MANIFEST_SHA256, pins=
     if (source / ".git").exists() or not (source / "web/index.html").is_file():
         raise SourceBuildError("project archive extraction invalid")
 
-    proxy = output / "proxy/golang.org/x/text/@v"
-    proxy.mkdir(parents=True)
-    module_zip = stage / "source/golang.org_x_text_v0.37.0.zip"
-    with zipfile.ZipFile(module_zip) as archive:
-        mod = archive.read("golang.org/x/text@v0.37.0/go.mod")
-    (proxy / "v0.37.0.mod").write_bytes(mod)
-    (proxy / "v0.37.0.info").write_text('{"Version":"v0.37.0","Time":"2026-01-01T00:00:00Z"}\n')
-    shutil.copyfile(module_zip, proxy / "v0.37.0.zip")
+    profile = module_profile(source / "go.mod")
+    if profile == "auth":
+        stage_auth_module_proxy(stage / "source", output / "proxy", source / "go.mod", source / "go.sum")
+        required_build_modules = [f"{module}\t{spec['version']}" for module, spec in AUTH_MODULE_PINS.items()]
+    else:
+        proxy = output / "proxy/golang.org/x/text/@v"
+        proxy.mkdir(parents=True)
+        module_zip = stage / "source/golang.org_x_text_v0.37.0.zip"
+        with zipfile.ZipFile(module_zip) as archive:
+            mod = archive.read("golang.org/x/text@v0.37.0/go.mod")
+        (proxy / "v0.37.0.mod").write_bytes(mod)
+        (proxy / "v0.37.0.info").write_text('{"Version":"v0.37.0","Time":"2026-01-01T00:00:00Z"}\n')
+        shutil.copyfile(module_zip, proxy / "v0.37.0.zip")
+        required_build_modules = ["golang.org/x/text\tv0.37.0"]
 
     srt = output / "srt-source"
     _run(["dpkg-source", "-x", str(stage / "source/srt_1.4.0-1build1.dsc"),
@@ -375,7 +485,7 @@ def build(stage, output, *, recipient=False, manifest_sha=MANIFEST_SHA256, pins=
             or soname != ["libastrax_srt.so.1"] or srt_needed.count("libcrypto.so.3") != 1
             or not re.search(r"\bdvbcsa_bs_decrypt\b", symbols)
             or "go1.26.9" not in build_info or "-tags=dvbcsa" not in build_info
-            or "golang.org/x/text\tv0.37.0" not in build_info):
+            or any(module not in build_info for module in required_build_modules)):
         raise SourceBuildError("candidate linkage or build metadata mismatch")
     result = {
         **build_status(recipient=recipient, in_progress=False),

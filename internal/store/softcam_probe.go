@@ -16,6 +16,9 @@ func (s *Store) TestSoftcam(id string) (*model.SoftcamTestResult, error) {
 }
 
 func (s *Store) TestSoftcamContext(ctx context.Context, id string) (*model.SoftcamTestResult, error) {
+	if err := s.requireActivated(); err != nil {
+		return nil, err
+	}
 	end, err := s.admitRuntime()
 	if err != nil {
 		return nil, err

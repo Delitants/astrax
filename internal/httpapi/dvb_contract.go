@@ -296,6 +296,9 @@ func requireDVBMutationOrigin(r *http.Request) error {
 	}
 	origins, present := r.Header["Origin"]
 	if !present {
+		if r.Context().Value(managementRefererVerifiedKey{}) == true {
+			return nil
+		}
 		marker := r.Header.Values("X-AstraX-Request")
 		if len(marker) != 1 || marker[0] != "1" {
 			return invalid

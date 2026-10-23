@@ -14,6 +14,42 @@
   --shadow: 0 10px 28px rgba(6, 31, 38, 0.1);
 }
 
+[hidden] { display: none !important; }
+
+.auth-shell {
+  max-width: 620px;
+  min-height: calc(100vh - 2.5rem);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.25rem;
+}
+.auth-brand { display: flex; align-items: center; gap: .7rem; color: var(--brand); font-weight: 800; letter-spacing: .04em; }
+.auth-mark { display: inline-grid; place-items: center; width: 2.3rem; height: 2.3rem; border-radius: .6rem; background: var(--brand); color: white; font-size: .8rem; }
+.auth-card { border: 1px solid var(--line); border-top: 5px solid var(--brand); border-radius: 16px; padding: clamp(1.3rem, 4vw, 2.5rem); background: var(--bg-card); box-shadow: var(--shadow); }
+.auth-eyebrow { margin: 0 0 .4rem; color: var(--brand-2); text-transform: uppercase; letter-spacing: .15em; font-size: .72rem; font-weight: 800; }
+.auth-card h1 { font-size: clamp(1.8rem, 6vw, 2.7rem); line-height: 1.08; }
+.auth-lede { max-width: 50ch; color: var(--muted); line-height: 1.5; }
+.auth-address { padding: .8rem 1rem; border: 1px solid var(--line); border-radius: .6rem; background: rgba(0,95,115,.05); color: var(--muted); overflow-wrap: anywhere; }
+.auth-address strong { display: block; margin-top: .2rem; color: var(--ink); }
+.auth-form { display: grid; gap: 1rem; max-width: 29rem; }
+.auth-form h2 { margin: .5rem 0 0; }
+.auth-form p { margin: 0; color: var(--muted); line-height: 1.5; }
+.auth-form label { display: grid; gap: .35rem; font-weight: 650; }
+.auth-form input { width: 100%; min-width: 0; }
+.auth-form button[type="submit"] { justify-self: start; min-width: 10rem; }
+.auth-foot { margin: 0; color: var(--muted); font-size: .8rem; }
+.password-form { margin-top: 1.5rem; }
+.topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; flex-wrap: wrap; }
+.management-address { color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
+@media (max-width: 680px) {
+  .auth-shell { min-height: calc(100dvh - 2.5rem); justify-content: flex-start; padding-top: 2rem; }
+  .auth-card { width: 100%; }
+  .topbar-actions { justify-content: flex-start; }
+  .management-address { width: 100%; }
+}
+
 * {
   box-sizing: border-box;
 }

@@ -1,14 +1,86 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) Delitants
 
+import base64
+import hashlib
+import json
 from pathlib import Path
+import tempfile
 from unittest import TestCase
 from unittest.mock import patch
+from zipfile import ZipFile
 
 from packaging import recipient_build
 
 
 class RecipientBuildModeTests(TestCase):
+    def test_module_profile_rejects_incomplete_auth_dependency_set(self):
+        self.assertTrue(hasattr(recipient_build, "module_profile"))
+        with tempfile.TemporaryDirectory() as directory:
+            go_mod = Path(directory) / "go.mod"
+            go_mod.write_text("module astrax\nrequire golang.org/x/text v0.37.0\n")
+            self.assertEqual(recipient_build.module_profile(go_mod), "legacy")
+            go_mod.write_text("module astrax\nrequire golang.org/x/crypto v0.55.0\n")
+            with self.assertRaisesRegex(recipient_build.SourceBuildError, "module"):
+                recipient_build.module_profile(go_mod)
+            go_mod.write_text("module astrax\nrequire (\n"
+                              " golang.org/x/crypto v0.55.0\n"
+                              " golang.org/x/sys v0.47.0 // indirect\n"
+                              " golang.org/x/text v0.41.0\n)\n")
+            self.assertEqual(recipient_build.module_profile(go_mod), "auth")
+
+    def test_auth_module_proxy_stages_only_matching_local_source(self):
+        self.assertTrue(hasattr(recipient_build, "stage_auth_module_proxy"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            module, version = "golang.org/x/crypto", "v0.55.0"
+            prefix = f"{module}@{version}/"
+            stem = f"golang.org_x_crypto_{version}"
+            mod = b"module golang.org/x/crypto\n\ngo 1.25.0\n"
+            license_text = b"Synthetic module license\n"
+            patents_text = b"Synthetic module patent grant\n"
+            zip_path = source / f"{stem}.zip"
+            with ZipFile(zip_path, "w") as archive:
+                archive.writestr(prefix + "go.mod", mod)
+                archive.writestr(prefix + "LICENSE", license_text)
+                archive.writestr(prefix + "PATENTS", patents_text)
+            (source / f"{stem}.mod").write_bytes(mod)
+            (source / f"{stem}.info").write_text(json.dumps({"Version": version, "Time": "2026-01-01T00:00:00Z"}))
+            go_mod = root / "go.mod"
+            go_mod.write_text(f"module astrax\n\ngo 1.25.0\nrequire {module} {version}\n")
+            lines = [f"{hashlib.sha256(archive_data).hexdigest()}  {prefix}{name}\n"
+                     for name, archive_data in (("LICENSE", license_text), ("PATENTS", patents_text), ("go.mod", mod))]
+            zip_h1 = "h1:" + base64.b64encode(hashlib.sha256("".join(lines).encode()).digest()).decode()
+            mod_line = f"{hashlib.sha256(mod).hexdigest()}  go.mod\n"
+            mod_h1 = "h1:" + base64.b64encode(hashlib.sha256(mod_line.encode()).digest()).decode()
+            go_sum = root / "go.sum"
+            go_sum.write_text(f"{module} {version} {zip_h1}\n{module} {version}/go.mod {mod_h1}\n")
+            hashes = {ext: recipient_build._sha256(source / f"{stem}.{ext}") for ext in ("zip", "mod", "info")}
+            specs = {module: {"version": version, "sha256": hashes,
+                              "license_sha256": hashlib.sha256(license_text).hexdigest(),
+                              "patents_sha256": hashlib.sha256(patents_text).hexdigest()}}
+            proxy = root / "proxy"
+            recipient_build.stage_auth_module_proxy(source, proxy, go_mod, go_sum, specs=specs)
+            for ext in ("zip", "mod", "info"):
+                self.assertEqual((proxy / module / "@v" / f"{version}.{ext}").read_bytes(),
+                                 (source / f"{stem}.{ext}").read_bytes())
+            (source / f"{stem}.mod").write_bytes(mod + b"tampered")
+            with self.assertRaisesRegex(recipient_build.SourceBuildError, "hash"):
+                recipient_build.stage_auth_module_proxy(source, root / "rejected", go_mod, go_sum, specs=specs)
+            self.assertFalse((root / "rejected").exists())
+            (source / f"{stem}.mod").write_bytes(mod)
+            go_sum.write_text(f"{module} {version} h1:wrong\n")
+            with self.assertRaisesRegex(recipient_build.SourceBuildError, "go.sum"):
+                recipient_build.stage_auth_module_proxy(source, root / "bad-sum", go_mod, go_sum, specs=specs)
+            self.assertFalse((root / "bad-sum").exists())
+            go_sum.write_text(f"{module} {version} {zip_h1}\n{module} {version}/go.mod {mod_h1}\n")
+            bad_specs = {module: {**specs[module], "patents_sha256": "0" * 64}}
+            with self.assertRaisesRegex(recipient_build.SourceBuildError, "PATENTS"):
+                recipient_build.stage_auth_module_proxy(source, root / "bad-patents", go_mod, go_sum, specs=bad_specs)
+            self.assertFalse((root / "bad-patents").exists())
+
     def test_recipient_mode_keeps_linux_and_nonroot_checks_without_private_qa_gate(self):
         with patch.object(recipient_build.platform, "system", return_value="Linux"), \
              patch.object(recipient_build.platform, "machine", return_value="x86_64"), \

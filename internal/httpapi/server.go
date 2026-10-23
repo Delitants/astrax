@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"astrax/internal/adminauth"
 	"astrax/internal/cert"
 	"astrax/internal/model"
 	"astrax/internal/softcam"
@@ -22,36 +23,50 @@ import (
 )
 
 type Server struct {
-	store       *store.Store
-	dvbOps      dvbOperationService
-	certMgr     *cert.Manager
-	mux         *http.ServeMux
-	externalAPI *ExternalAPIManager
+	store               *store.Store
+	dvbOps              dvbOperationService
+	certMgr             *cert.Manager
+	auth                *adminauth.Manager
+	managementTransport adminauth.Admission
+	mux                 *http.ServeMux
+	webAssets           fs.FS
+	externalAPI         *ExternalAPIManager
 }
 
 type apiError struct {
 	Error string `json:"error"`
 }
 
-func New(st *store.Store, webFS fs.FS, certMgr *cert.Manager) (*Server, error) {
+func New(st *store.Store, webFS fs.FS, certMgr *cert.Manager, auth *adminauth.Manager) (*Server, error) {
+	return NewWithManagementTransport(st, webFS, certMgr, auth, adminauth.Admission{})
+}
+
+// NewWithManagementTransport binds the management handler to preflight's fixed TLS identities.
+func NewWithManagementTransport(st *store.Store, webFS fs.FS, certMgr *cert.Manager, auth *adminauth.Manager, admission adminauth.Admission) (*Server, error) {
+	if auth == nil {
+		return nil, errors.New("administrator authentication is required")
+	}
 	sub, err := fs.Sub(webFS, "web")
 	if err != nil {
 		return nil, fmt.Errorf("load web assets: %w", err)
 	}
 
 	s := &Server{
-		store:   st,
-		dvbOps:  st,
-		certMgr: certMgr,
-		mux:     http.NewServeMux(),
+		store:               st,
+		dvbOps:              st,
+		certMgr:             certMgr,
+		auth:                auth,
+		managementTransport: admission,
+		mux:                 http.NewServeMux(),
 	}
 
 	s.registerRoutes(sub)
+	s.webAssets = sub
 	return s, nil
 }
 
 func (s *Server) Handler() http.Handler {
-	return requestLogger(s.mux)
+	return &managementHandler{server: s}
 }
 
 // ConfigureExternalAPI is called once during process construction, before any
@@ -524,13 +539,6 @@ func writeSSE(w http.ResponseWriter, event string, payload any) error {
 		return err
 	}
 	return nil
-}
-
-func requestLogger(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s", r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
-	})
 }
 
 func (s *Server) handleCertStatus(w http.ResponseWriter, r *http.Request) {

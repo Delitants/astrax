@@ -238,6 +238,9 @@ func (s *Store) supersededDVBRefreshError(generation, published uint64, winningE
 }
 
 func (s *Store) RefreshDVBCards(ctx context.Context) (model.DVBCardSummary, error) {
+	if err := s.requireActivated(); err != nil {
+		return model.DVBCardSummary{}, err
+	}
 	end, admissionErr := s.admitRuntime()
 	if admissionErr != nil {
 		return model.DVBCardSummary{}, admissionErr

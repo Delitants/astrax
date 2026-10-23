@@ -11,6 +11,7 @@ import { createDVBCardsController } from "./dvb-cards.js?v=23";
 import { createPageEventFeed } from "./events.js?v=2";
 import { createAPIManagementController } from "./api-management.js?v=1";
 import { createEPGHealthController } from "./epg-health.js?v=2";
+import {bootstrapAuth, fetchProtected, verifyEventSession, authGeneration} from './auth.js';
 
 const DEFAULT_DES_KEY = "0102030405060708091011121314";
 
@@ -113,7 +114,7 @@ const noticeActions = new WeakMap();
 const editorSessions = new WeakMap();
 
 function beginNoticeAction(target, writesSettings = false, settingsSection = null) {
-  const action = { target, generation: ++actionGeneration, previousError: globalActionOwner };
+  const action = { target, generation: ++actionGeneration, authEpoch: authGeneration(), previousError: globalActionOwner };
   if (writesSettings) {
     action.settingsRevision = ++settingsRevision;
     if (settingsSection) {
@@ -137,10 +138,11 @@ function isCurrentSettingsWrite(action) {
 }
 
 function isCurrentAction(action) {
-  return noticeActions.get(action.target) === action && isCurrentSettingsWrite(action);
+  return action.authEpoch === authGeneration() && noticeActions.get(action.target) === action && isCurrentSettingsWrite(action);
 }
 
 function showError(error, action = null) {
+  if (error?.status === 401) return;
   if (action && (!isCurrentAction(action) || globalActionOwner?.generation > action.generation)) return;
   const owner = { target: action?.target, generation: action?.generation ?? ++actionGeneration };
   globalActionOwner = owner;
@@ -226,6 +228,7 @@ function updateOverview(status) {
   els.uptimeVal.textContent = metric(status.uptime_seconds) === "Unavailable" ? "Unavailable" : formatDuration(status.uptime_seconds);
   els.streamCountVal.textContent = streamCounts(status);
   els.endpointVal.textContent = status.control_endpoint ?? "Unavailable";
+  document.getElementById('managementAddress').textContent = `${location.origin} · Configured HTTP: ${status.control_endpoint ?? 'Unavailable'}`;
   refreshStatusPill();
 }
 
@@ -1205,15 +1208,18 @@ els.epgForm?.addEventListener("submit", async (event) => {
 
 els.refreshEpgBtn?.addEventListener("click", async () => {
   const action = beginNoticeAction(els.epgFeedNotice);
+  const started = authGeneration();
   try {
-    const resp = await fetch("/api/v1/epg");
+    const resp = await fetchProtected("/api/v1/epg");
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: "epg unavailable" }));
       throw new Error(err.error || `HTTP ${resp.status}`);
     }
     const blob = await resp.blob();
+    if (started !== authGeneration()) return;
     if (isCurrentAction(action)) showEPGFeedNotice("ok", `Cached EPG feed checked. ${blob.size} bytes. No source refresh was requested.`);
   } catch (error) {
+    if (error.status === 401) return;
     if (isCurrentAction(action)) showEPGFeedNotice("err", error.message);
   }
 });
@@ -1306,7 +1312,7 @@ els.certGenerateForm?.addEventListener("submit", async (event) => {
     common_name: els.certGenerateForm.common_name.value.trim(),
   };
   await certificateWrite(els.certGenerateForm, els.certGenerateDialog, els.certGenerateNotice,
-    "/api/v1/certificates/generate", payload, "Self-signed certificate generated. Restart the application to enable HTTPS.");
+    "/api/v1/certificates/generate", payload, "Self-signed certificate generated. Set control_listen_https to a concrete IP and ensure the certificate covers the browser address. Save Settings first. Restart the application to enable HTTPS.");
 });
 
 els.uploadCertBtn?.addEventListener("click", () => {
@@ -1328,7 +1334,7 @@ els.certUploadForm?.addEventListener("submit", async (event) => {
     key: els.certUploadForm.key.value.trim(),
   };
   await certificateWrite(els.certUploadForm, els.certUploadDialog, els.certUploadNotice,
-    "/api/v1/certificates/upload", payload, "Certificate uploaded. Restart the application to enable HTTPS.");
+    "/api/v1/certificates/upload", payload, "Certificate uploaded. Set control_listen_https to a concrete IP and ensure the certificate covers the browser address. Save Settings first. Restart the application to enable HTTPS.");
 });
 
 els.deleteCertBtn?.addEventListener("click", async () => {
@@ -1390,6 +1396,7 @@ const dvbStreamsController = createDVBStreamsController({
 const dvbCardsController = createDVBCardsController({requestJSON: api, confirmAction});
 const apiManagementController = createAPIManagementController({requestJSON: api, confirmAction});
 const eventFeed = createPageEventFeed({
+  checkAuth: verifyEventSession,
   controllers: {
     'dvb-cards': dvbCardsController,
     'dvb-streams': {...dvbStreamsController, synchronize(options) {
@@ -1459,6 +1466,36 @@ window.addEventListener("beforeunload", () => {
   eventFeed.stop();
 });
 
-// Navigation remains usable even if an unrelated bootstrap resource fails.
-pageNavigation.start();
-void bootstrap();
+function clearManagementView() {
+  pageNavigation.stop();
+  eventFeed.stop();
+  state.streams = [];
+  state.adapters = [];
+  state.softcams = [];
+  state.logs = [];
+  state.settings = null;
+  state.lastStatus = null;
+  state.liveConnected = false;
+  for (const id of ['streamsBody','overviewAdaptersBody','softcamsBody','logsBox',
+    'dvbStreamTableBody','dvbCardsTableBody','apiTokensBody','epgHealthOutput']) {
+    const target = document.getElementById(id);
+    if (target) target.textContent = '';
+  }
+  for (const id of ['versionVal','uptimeVal','streamCountVal','endpointVal']) {
+    const target = document.getElementById(id);
+    if (target) target.textContent = '-';
+  }
+  document.querySelectorAll('#dashboard input[type="password"], #apiTokenSecret, #apiTryToken, #certUploadForm [name="key"]').forEach(field => {field.value = '';});
+  document.querySelectorAll('#dashboard .notice').forEach(notice => {notice.hidden = true; notice.textContent = '';});
+  els.statusPill.textContent = 'Loading...';
+  clearActionError();
+  document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
+}
+
+void bootstrapAuth({
+  onAuthenticated() {
+    pageNavigation.start();
+    void bootstrap();
+  },
+  onExpired: clearManagementView,
+});

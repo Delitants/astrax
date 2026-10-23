@@ -5,10 +5,12 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"embed"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"astrax/internal/adminauth"
 	"astrax/internal/cert"
 	"astrax/internal/httpapi"
 	"astrax/internal/store"
@@ -44,60 +47,26 @@ func main() {
 	}
 	defer removePIDFile(pidFile)
 
-	st, err := store.New(*configPath)
+	prepared, err := prepareManagement(*configPath, *listen, *httpsListen)
 	if err != nil {
-		log.Fatalf("failed to initialize store: %v", err)
+		log.Fatalf("management preflight failed: %v", err)
 	}
-
-	appDir := filepath.Dir(*configPath)
-	certMgr := cert.New(appDir)
-
-	srv, err := httpapi.New(st, webFS, certMgr)
+	defer prepared.Close()
+	st := prepared.store
+	srv, err := httpapi.NewWithManagementTransport(st, webFS, prepared.certManager, prepared.auth, prepared.admission)
 	if err != nil {
+		prepared.Close()
 		log.Fatalf("failed to initialize http server: %v", err)
 	}
-
-	settings := st.Settings()
-
-	// Resolve listen addresses from config when flags are not explicitly set.
-	if *listen == "" {
-		*listen = settings.ControlListen
-		if *listen == "" {
-			*listen = "0.0.0.0:8080"
-		}
+	managementHandler := srv.Handler()
+	var httpHandler http.Handler = managementHandler
+	if prepared.redirectHTTPS {
+		httpHandler = redirectHandler(prepared.redirectAddr)
 	}
-
-	// Determine TLS config
-	tlsCfg, _ := certMgr.TLSConfigWithVersion(settings.TLSMinVersion)
-	certPath, keyPath := certMgr.Paths()
-	hasCerts := certMgr.Exists()
-	if tlsCfg != nil {
-		st.SetStreamerTLSConfig(tlsCfg)
-	}
-
-	// Determine if redirect is enabled
-	redirectHTTPS := settings.RedirectHTTPS && hasCerts
-
-	// Determine HTTPS listen address
-	httpsAddr := *httpsListen
-	if httpsAddr == "" {
-		httpsAddr = settings.ControlListenHTTPS
-		if httpsAddr == "" {
-			httpsAddr = "0.0.0.0:8443"
-		}
-	}
-
-	// Reserve the actual flag-resolved management ports for the external API.
-	externalAPI := srv.ConfigureExternalAPI(*listen, httpsAddr)
-
-	// Create HTTP server
-	httpHandler := srv.Handler()
-	if redirectHTTPS {
-		httpHandler = redirectHandler(httpsAddr, srv.Handler())
-	}
+	externalAPI := srv.ConfigureExternalAPI(prepared.httpAddr, prepared.httpsAddr)
 
 	httpServer := &http.Server{
-		Addr:         *listen,
+		Addr:         prepared.httpAddr,
 		Handler:      httpHandler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 20 * time.Second,
@@ -105,28 +74,35 @@ func main() {
 	}
 
 	var httpsServer *http.Server
-	if hasCerts {
+	if prepared.httpsListener != nil {
 		httpsServer = &http.Server{
-			Addr:         httpsAddr,
-			Handler:      srv.Handler(),
-			TLSConfig:    tlsCfg,
+			Addr:         prepared.httpsAddr,
+			Handler:      managementHandler,
+			TLSConfig:    prepared.tlsConfig,
 			ReadTimeout:  10 * time.Second,
 			WriteTimeout: 20 * time.Second,
 			IdleTimeout:  60 * time.Second,
 		}
 	}
+	if err := st.StartRuntime(); err != nil {
+		prepared.Close()
+		log.Fatalf("failed to activate store runtime: %v", err)
+	}
+	if prepared.tlsConfig != nil {
+		st.SetStreamerTLSConfig(prepared.tlsConfig)
+	}
 
 	go func() {
-		log.Printf("AstraX web ui available at http://%s", *listen)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Printf("AstraX management HTTP listener reserved at %s", prepared.httpAddr)
+		if err := httpServer.Serve(prepared.httpListener); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http server failed: %v", err)
 		}
 	}()
 
 	if httpsServer != nil {
 		go func() {
-			log.Printf("AstraX web ui available at https://%s", httpsAddr)
-			if err := httpsServer.ListenAndServeTLS(certPath, keyPath); err != nil && err != http.ErrServerClosed {
+			log.Printf("AstraX management HTTPS listener reserved at %s", prepared.httpsAddr)
+			if err := httpsServer.ServeTLS(prepared.httpsListener, "", ""); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("https server failed: %v", err)
 			}
 		}()
@@ -164,17 +140,127 @@ func main() {
 	}
 }
 
-func redirectHandler(httpsAddr string, next http.Handler) http.Handler {
+func redirectHandler(httpsAddr string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Don't redirect API or health endpoints — some clients need HTTP.
-		if r.URL.Path == "/api/v1/events" || r.URL.Path == "/api/v1/epg" {
-			next.ServeHTTP(w, r)
-			return
-		}
 		target := "https://" + httpsAddr + r.URL.RequestURI()
 		http.Redirect(w, r, target, http.StatusPermanentRedirect)
 	})
 }
+
+type preparedManagement struct {
+	store         *store.Store
+	auth          *adminauth.Manager
+	certManager   *cert.Manager
+	httpListener  net.Listener
+	httpsListener net.Listener
+	tlsConfig     *tls.Config
+	httpAddr      string
+	httpsAddr     string
+	redirectAddr  string
+	admission     adminauth.Admission
+	redirectHTTPS bool
+}
+
+func (p *preparedManagement) Close() {
+	if p == nil {
+		return
+	}
+	if p.httpsListener != nil {
+		_ = p.httpsListener.Close()
+	}
+	if p.httpListener != nil {
+		_ = p.httpListener.Close()
+	}
+	if p.auth != nil {
+		p.auth.Close()
+	}
+	if p.store != nil {
+		p.store.Close()
+	}
+}
+
+type managementDeps struct {
+	storeOptions store.Options
+	listen       func(network, address string) (net.Listener, error)
+}
+
+func prepareManagement(configPath, listenOverride, httpsOverride string) (*preparedManagement, error) {
+	return prepareManagementWith(configPath, listenOverride, httpsOverride, managementDeps{})
+}
+
+func prepareManagementWith(configPath, listenOverride, httpsOverride string, deps managementDeps) (_ *preparedManagement, err error) {
+	if deps.listen == nil {
+		deps.listen = net.Listen
+	}
+	p := &preparedManagement{}
+	defer func() {
+		if err != nil {
+			p.Close()
+		}
+	}()
+	p.store, err = store.NewDormant(configPath, deps.storeOptions)
+	if err != nil {
+		return nil, fmt.Errorf("load dormant store: %w", err)
+	}
+	p.auth, err = adminauth.Open(configPath, p.store.AdminAuthInitialized())
+	if err != nil {
+		return nil, fmt.Errorf("open administrator state: %w", err)
+	}
+	settings := p.store.Settings()
+	if settings.TLSMinVersion != "" && settings.TLSMinVersion != "1.2" && settings.TLSMinVersion != "1.3" {
+		return nil, fmt.Errorf("management tls_min_version must be 1.2 or 1.3")
+	}
+	p.certManager = cert.New(filepath.Dir(configPath))
+	p.tlsConfig, err = p.certManager.TLSConfigWithVersion(settings.TLSMinVersion)
+	if err != nil {
+		return nil, fmt.Errorf("load management TLS certificate: %w", err)
+	}
+	httpAddr := settings.ControlListen
+	if listenOverride != "" {
+		httpAddr = listenOverride
+	}
+	httpsAddr := settings.ControlListenHTTPS
+	if httpsOverride != "" {
+		httpsAddr = httpsOverride
+	}
+	if p.tlsConfig == nil && httpsOverride == "" && !settings.RedirectHTTPS && httpsAddr == modelDefaultHTTPSAddress {
+		httpsAddr = ""
+	}
+	enrolled, err := p.auth.EnrollmentState()
+	if err != nil {
+		return nil, fmt.Errorf("verify administrator enrollment: %w", err)
+	}
+	if settings.RedirectHTTPS && !enrolled {
+		return nil, fmt.Errorf("HTTPS redirect requires administrator enrollment")
+	}
+	admission, err := adminauth.AdmitManagement(httpAddr, httpsAddr, enrolled, p.tlsConfig, listenOverride != "")
+	if err != nil {
+		return nil, err
+	}
+	if settings.RedirectHTTPS && !admission.StartHTTPS {
+		return nil, fmt.Errorf("HTTPS redirect requires an admitted HTTPS listener and certificate")
+	}
+	p.httpAddr, p.httpsAddr = admission.HTTPAddr, admission.HTTPSAddr
+	p.redirectAddr = admission.RedirectHTTPSAddr
+	p.admission = admission
+	p.redirectHTTPS = settings.RedirectHTTPS
+	p.httpListener, err = deps.listen("tcp", p.httpAddr)
+	if err != nil {
+		return nil, fmt.Errorf("reserve management HTTP %s: %w", p.httpAddr, err)
+	}
+	if admission.StartHTTPS {
+		p.httpsListener, err = deps.listen("tcp", p.httpsAddr)
+		if err != nil {
+			return nil, fmt.Errorf("reserve management HTTPS %s: %w", p.httpsAddr, err)
+		}
+	}
+	if err = p.store.MarkAdminAuthInitialized(); err != nil {
+		return nil, fmt.Errorf("mark administrator initialized: %w", err)
+	}
+	return p, nil
+}
+
+const modelDefaultHTTPSAddress = "0.0.0.0:8443"
 
 func pidFilePath(configPath string) string {
 	abs, _ := filepath.Abs(configPath)

@@ -38,7 +38,7 @@ function validEnvelope(event, name, message) {
   return false;
 }
 
-export function createEventClient({url = "/api/v1/events", onEvent, onResync, onState} = {}) {
+export function createEventClient({url = "/api/v1/events", onEvent, onResync, onState, checkAuth} = {}) {
   let running = false;
   let epoch = 0;
   let current = null;
@@ -61,12 +61,22 @@ export function createEventClient({url = "/api/v1/events", onEvent, onResync, on
     release(connection);
     if (!running || previousEpoch !== epoch || current) return;
     const delay = retryDelays[Math.min(failures++, retryDelays.length - 1)];
-    retryTimer = setTimeout(() => {
-      retryTimer = undefined;
-      if (running && previousEpoch === epoch) connect(reason);
-    }, delay);
-    // Recovery is already scheduled; a broken state observer must not recurse.
-    settledState({state: "reconnecting", reason, delay});
+    const retry = () => {
+      if (!running || previousEpoch !== epoch) return;
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined;
+        if (running && previousEpoch === epoch) connect(reason);
+      }, delay);
+    };
+    // A failed EventSource handshake has no readable status. Probe the session
+    // before allowing another connection, and fence the result by epoch.
+    if (checkAuth && (reason === 'disconnect' || reason === 'ready_timeout')) {
+      settledState({state: "reconnecting", reason, delay});
+      Promise.resolve().then(checkAuth).then(allowed => {if (allowed) retry();}).catch(() => {});
+    } else {
+      retry();
+      settledState({state: "reconnecting", reason, delay});
+    }
   }
 
   function settledState(info) {
@@ -213,7 +223,7 @@ export function createEventClient({url = "/api/v1/events", onEvent, onResync, on
 
 // One transport at a time: DVB pages consume deltas; other pages keep the
 // External-only legacy snapshot contract. Closing a transport fences callbacks.
-export function createPageEventFeed({controllers = {}, onSnapshot, onState, onError} = {}) {
+export function createPageEventFeed({controllers = {}, onSnapshot, onState, onError, checkAuth} = {}) {
   let current, epoch = 0;
   const notify = (info, controller) => {
     controller?.setLiveState?.(info);
@@ -235,8 +245,10 @@ export function createPageEventFeed({controllers = {}, onSnapshot, onState, onEr
       connection.source?.close();
       connection.source = undefined;
       clearTimeout(connection.timer);
-      connection.timer = setTimeout(() => {if (active()) legacy(connection);}, 2000);
       notify({state:'reconnecting',reason:'disconnect'});
+      const retry = () => {if (active()) connection.timer = setTimeout(() => {if (active()) legacy(connection);}, 2000);};
+      if (checkAuth) Promise.resolve().then(checkAuth).then(allowed => {if (allowed) retry();}).catch(() => {});
+      else retry();
     };
     notify({state:'connecting'});
     if (!active()) return;
@@ -268,6 +280,7 @@ export function createPageEventFeed({controllers = {}, onSnapshot, onState, onEr
       if (!controller) {legacy(connection);return;}
       const owns = () => current === connection && epoch === token;
       connection.client = createEventClient({
+        checkAuth,
         onState(info) {if (owns()) notify(info,controller);},
         async onResync(info) {
           const result = await controller.synchronize(info);

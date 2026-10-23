@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
+	"net"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -18,8 +20,9 @@ import (
 )
 
 type migrationResult struct {
-	migrated bool
-	source   []byte
+	migrated         bool
+	source           []byte
+	oldControlListen string
 }
 
 type migrationFileOps struct {
@@ -80,6 +83,7 @@ func loadConfig(path string, now time.Time) (model.Config, migrationResult, erro
 	}
 	cfg.Settings.ExternalAPI = apiSettings
 	normalizeLoadedConfig(&cfg, now)
+	oldControlListen := cfg.Settings.ControlListen
 
 	migrated, changed, err := migrateConfig(cfg)
 	if err != nil {
@@ -94,8 +98,9 @@ func loadConfig(path string, now time.Time) (model.Config, migrationResult, erro
 		}
 	}
 	return migrated, migrationResult{
-		migrated: changed,
-		source:   append([]byte(nil), data...),
+		migrated:         changed,
+		source:           append([]byte(nil), data...),
+		oldControlListen: oldControlListen,
 	}, nil
 }
 
@@ -124,6 +129,9 @@ func persistMigratedConfig(path string, cfg model.Config, result migrationResult
 	if err := ops.write(path, cfg, result.source); err != nil {
 		return fmt.Errorf("write migrated config: %w", err)
 	}
+	if result.oldControlListen != cfg.Settings.ControlListen {
+		log.Printf("migrated management HTTP listen from %s to %s", result.oldControlListen, cfg.Settings.ControlListen)
+	}
 	return nil
 }
 
@@ -133,6 +141,29 @@ func defaultMigrationFileOps() migrationFileOps {
 		write:    writeConfigAtomicExpected,
 		readFile: readConfigBytes,
 	}
+}
+
+// AdminAuthInitialized is the nonsecret marker used to distinguish first boot
+// from a deleted administrator sidecar.
+func (s *Store) AdminAuthInitialized() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.config.AdminAuthInitialized
+}
+
+// MarkAdminAuthInitialized must be called only after the sidecar is durable.
+func (s *Store) MarkAdminAuthInitialized() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.config.AdminAuthInitialized {
+		return nil
+	}
+	s.config.AdminAuthInitialized = true
+	if err := s.saveLocked(); err != nil {
+		s.config.AdminAuthInitialized = false
+		return err
+	}
+	return nil
 }
 
 func migrateConfig(cfg model.Config) (model.Config, bool, error) {
@@ -146,11 +177,12 @@ func migrateConfig(cfg model.Config) (model.Config, bool, error) {
 
 	cfg.Streams = cloneStreamsForMigration(cfg.Streams)
 	cfg.DVBCards = append([]model.DVBCardConfig(nil), cfg.DVBCards...)
+	addressChanged := migrateLegacyControlListen(&cfg.Settings.ControlListen)
 	if cfg.SchemaVersion == model.CurrentSchemaVersion {
 		if err := validateMigratedConfig(cfg); err != nil {
 			return model.Config{}, false, err
 		}
-		return cfg, false, nil
+		return cfg, addressChanged, nil
 	}
 
 	for i := range cfg.Streams {
@@ -175,6 +207,26 @@ func migrateConfig(cfg model.Config) (model.Config, bool, error) {
 		return model.Config{}, false, err
 	}
 	return cfg, true, nil
+}
+
+func migrateLegacyControlListen(address *string) bool {
+	host, port, err := net.SplitHostPort(*address)
+	if err != nil {
+		return false
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 || strconv.Itoa(n) != port {
+		return false
+	}
+	switch host {
+	case "", "0.0.0.0":
+		*address = net.JoinHostPort("127.0.0.1", port)
+	case "::":
+		*address = net.JoinHostPort("::1", port)
+	default:
+		return false
+	}
+	return true
 }
 
 func cloneStreamsForMigration(streams []model.Stream) []model.Stream {

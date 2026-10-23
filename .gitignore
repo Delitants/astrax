@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) Delitants
 /astrax-config*.json
+*.admin-setup
+*.admin-auth.json
+*.admin-auth.json.lock
 /.env*
 /*.pem
 /*.key

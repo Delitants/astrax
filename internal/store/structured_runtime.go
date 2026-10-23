@@ -324,7 +324,7 @@ func (s *Store) reconcileStructuredRuntime() {
 	if s.scheduler == nil || s.runtimeSink == nil {
 		return
 	}
-	end, err := s.admitRuntime()
+	end, err := s.admitRuntimeStarting()
 	if err != nil {
 		return
 	}

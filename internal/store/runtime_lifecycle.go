@@ -13,17 +13,63 @@ import (
 )
 
 var ErrStoreClosed = errors.New("Store runtime closed")
+var ErrRuntimeAlreadyStarted = errors.New("Store runtime activation already attempted")
+var ErrRuntimeNotStarted = errors.New("Store runtime not started")
 
 type storeRuntimeLifecycle struct {
-	context       context.Context
-	cancel        context.CancelFunc
-	cleanupErrors []error
-	mu            sync.Mutex
-	cond          *sync.Cond
-	active        int
-	closing       bool
-	done          chan struct{}
-	result        error
+	context        context.Context
+	cancel         context.CancelFunc
+	cleanupErrors  []error
+	startMu        sync.Mutex
+	startAttempted bool
+	dormant        bool
+	starting       bool
+	activated      bool
+	mu             sync.Mutex
+	cond           *sync.Cond
+	active         int
+	closing        bool
+	done           chan struct{}
+	result         error
+}
+
+// StartRuntime is single-shot, including failures. CloseWithError shares the
+// start gate so shutdown cannot miss workers created during activation.
+func (s *Store) StartRuntime() error {
+	l := &s.runtimeLifecycle
+	l.startMu.Lock()
+	defer l.startMu.Unlock()
+	l.mu.Lock()
+	if l.closing {
+		l.mu.Unlock()
+		return ErrStoreClosed
+	}
+	if l.startAttempted {
+		l.mu.Unlock()
+		return ErrRuntimeAlreadyStarted
+	}
+	l.startAttempted = true
+	l.starting = true
+	l.mu.Unlock()
+	err := s.startRuntime()
+	l.mu.Lock()
+	l.starting = false
+	l.activated = err == nil
+	l.mu.Unlock()
+	return err
+}
+
+func (s *Store) requireActivated() error {
+	l := &s.runtimeLifecycle
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closing {
+		return ErrStoreClosed
+	}
+	if l.dormant && !l.activated {
+		return ErrRuntimeNotStarted
+	}
+	return nil
 }
 
 func (l *storeRuntimeLifecycle) initLocked() {
@@ -34,12 +80,26 @@ func (l *storeRuntimeLifecycle) initLocked() {
 	}
 }
 func (s *Store) admitRuntime() (func(), error) {
+	return s.admitRuntimeState(false)
+}
+
+// Private startup paths may admit work before activation is published. Public
+// operations use admitRuntime and stay closed until the whole start completes.
+func (s *Store) admitRuntimeStarting() (func(), error) {
+	return s.admitRuntimeState(true)
+}
+
+func (s *Store) admitRuntimeState(allowStarting bool) (func(), error) {
 	l := &s.runtimeLifecycle
 	l.mu.Lock()
 	l.initLocked()
 	if l.closing {
 		l.mu.Unlock()
 		return nil, ErrStoreClosed
+	}
+	if l.dormant && !l.activated && !(allowStarting && l.starting) {
+		l.mu.Unlock()
+		return nil, ErrRuntimeNotStarted
 	}
 	l.active++
 	l.mu.Unlock()
@@ -63,11 +123,13 @@ func (s *Store) runtimeClosing() bool {
 // a timeout. All callers receive the same stored aggregate, including failures.
 func (s *Store) CloseWithError() error {
 	l := &s.runtimeLifecycle
+	l.startMu.Lock()
 	l.mu.Lock()
 	l.initLocked()
 	if l.closing {
 		done := l.done
 		l.mu.Unlock()
+		l.startMu.Unlock()
 		<-done
 		return l.result
 	}
@@ -78,6 +140,7 @@ func (s *Store) CloseWithError() error {
 	if s.epgStop != nil {
 		close(s.epgStop)
 	}
+	l.startMu.Unlock()
 	l.mu.Lock()
 	for l.active != 0 {
 		l.cond.Wait()

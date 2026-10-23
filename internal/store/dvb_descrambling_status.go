@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"astrax/internal/csa"
@@ -16,12 +18,24 @@ import (
 	"astrax/internal/softcam"
 )
 
-// Build capability is immutable. Cache it before serving any Store reads so a
-// GET or locked snapshot projection never enters CGo, even for capability checks.
-var descramblingBuildBackend = func() model.DVBDescramblingBackend {
-	available, reason := csa.Capability()
-	return model.DVBDescramblingBackend{Available: available, Reason: reason}
-}()
+// Native capability is probed only during runtime activation, never at package
+// initialization or while projecting a dormant Store snapshot.
+var descramblingBuildBackend atomic.Value
+var descramblingBuildBackendOnce sync.Once
+
+func activateDescramblingBuildBackend() {
+	descramblingBuildBackendOnce.Do(func() {
+		available, reason := csa.Capability()
+		descramblingBuildBackend.Store(model.DVBDescramblingBackend{Available: available, Reason: reason})
+	})
+}
+
+func cachedDescramblingBuildBackend() model.DVBDescramblingBackend {
+	if value := descramblingBuildBackend.Load(); value != nil {
+		return value.(model.DVBDescramblingBackend)
+	}
+	return model.DVBDescramblingBackend{Reason: "backend_unavailable"}
+}
 
 func (s *Store) DVBDescramblingStatus(id string) (model.DVBDescramblingStatus, error) {
 	end, err := s.admitRuntime()
@@ -54,7 +68,7 @@ func projectDescramblingRuntime(st *model.Stream) {
 	if !st.Enabled || !descramblingEnabled(*st) || st.Runtime.Descrambling == nil {
 		st.Runtime.Descrambling = descramblingBaseRuntime(*st)
 		if st.Enabled && descramblingEnabled(*st) {
-			if !descramblingBuildBackend.Available {
+			if !cachedDescramblingBuildBackend().Available {
 				st.Runtime.Descrambling.State, st.Runtime.Descrambling.Reason = "unsupported", "backend_unavailable"
 			}
 		}
@@ -125,7 +139,7 @@ func descramblingCandidates(service mpegts.Service) ([]model.DVBDescramblingCand
 
 func (s *Store) descramblingStatusForStream(st model.Stream) model.DVBDescramblingStatus {
 	base := descramblingBaseRuntime(st)
-	status := model.DVBDescramblingStatus{Backend: descramblingBuildBackend, Candidates: []model.DVBDescramblingCandidate{}, Policy: st.DVBDescrambling.Clone(), State: base.State, Reason: base.Reason}
+	status := model.DVBDescramblingStatus{Backend: cachedDescramblingBuildBackend(), Candidates: []model.DVBDescramblingCandidate{}, Policy: st.DVBDescrambling.Clone(), State: base.State, Reason: base.Reason}
 	if st.Runtime.Descrambling != nil {
 		switch st.Runtime.Descrambling.State {
 		case "unsupported", "capacity", "waiting_route":

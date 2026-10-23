@@ -306,6 +306,17 @@ class InstallerCoreTests(unittest.TestCase):
                 shutil.rmtree(self.root / "var/lib/astrax")
                 (self.root / "qa/account").unlink(missing_ok=True)
 
+    def test_activation_explains_first_run_without_disclosing_secret(self):
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        result = self.run_core("astrax_activate")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("http://127.0.0.1:8080", result.stdout)
+        self.assertIn("/var/lib/astrax/astrax-config.json.admin-setup", result.stdout)
+        self.assertIn("SSH tunnel", result.stdout)
+        self.assertIn("ssh -L 8080:127.0.0.1:8080 USER@HOST", result.stdout)
+        self.assertNotIn("one-time secret:", result.stdout.lower())
+
     def test_activation_refuses_modified_executable(self):
         self.configure_init("systemd")
         self.assertEqual(self.run_core("astrax_install").returncode, 0)

@@ -47,6 +47,31 @@ one isolated, non-serving native Linux amd64 build; its output hashes differ
 from the frozen candidate. Do not relabel or modify a held layout in place to
 imply distribution readiness.
 
+## Pending management-auth source candidate
+
+The locally staged management-auth source is **not** the frozen executable
+above. Its new module dependencies are `golang.org/x/crypto v0.55.0`,
+`golang.org/x/sys v0.47.0`, and `golang.org/x/text v0.41.0`. The offline recipe
+can verify their exact local ZIP, `.mod`, and `.info` inputs against pinned
+SHA-256 values, the source `go.mod` and `go.sum`, and each ZIP's `LICENSE` and
+`PATENTS` notices, then
+populate a file-only Go module proxy. It rejects an incomplete auth module set.
+This support does not update the frozen `6544bd0` source archive, source-stage
+manifest, release identity, or binary. A new source commit/archive and notice
+inventory must be pinned before a current-source build or `.run` can be claimed.
+
+The new management listener defaults to `http://127.0.0.1:8080`, accessible on
+the host only. From a workstation, use a private tunnel such as
+`ssh -L 8080:127.0.0.1:8080 USER@HOST`, then open the local URL. On first
+start, the `astrax` service account creates the owner-only one-time setup file
+`/var/lib/astrax/astrax-config.json.admin-setup`; an administrator can read it
+locally as root and enter the secret in the setup page. The installer prints
+only the file path, never the secret. After enrollment the setup file is
+removed. If the config changes the management port, adjust the tunnel and URL.
+Before enabling HTTPS and restarting, configure a concrete HTTPS listen IP and
+a certificate matching the intended browser IP or DNS name; the wildcard
+HTTPS default is not an admitted certificate-backed listener.
+
 `build_run.py` refuses a distributable package unless `candidate_qualified`,
 `distribution_cleared`, and `publication_cleared` are all true and
 source/notice closure is complete. `--qa-extract-only` makes a non-installing

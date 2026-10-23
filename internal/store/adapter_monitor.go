@@ -75,7 +75,7 @@ func (s *Store) startAdapterMonitor(profile model.AdapterProfile, force bool) {
 	if profile.ID == "" || s.disableRuntime {
 		return
 	}
-	end, err := s.admitRuntime()
+	end, err := s.admitRuntimeStarting()
 	if err != nil {
 		return
 	}

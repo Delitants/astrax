@@ -289,6 +289,7 @@ type Store struct {
 	testHookBroadcastCaptured               func()
 	structured                              structuredRuntimeState
 	runtimeLifecycle                        storeRuntimeLifecycle
+	runtimeOptions                          Options
 	runtimeDeps                             RuntimeDependencies
 	runtimeSink                             storeStreamSink
 	scheduler                               *dvbScheduler
@@ -358,28 +359,43 @@ func New(path string) (*Store, error) {
 }
 
 func NewWithOptions(path string, opts Options) (*Store, error) {
+	s, err := NewDormant(path, opts)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.StartRuntime(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// NewDormant loads persistent configuration without creating runtime dependencies.
+// The caller must complete preflight before calling StartRuntime.
+func NewDormant(path string, opts Options) (*Store, error) {
 	opts = opts.withDefaults()
 	s := &Store{
-		path:            path,
-		started:         opts.Now().UTC(),
-		now:             opts.Now,
-		dvbOpener:       opts.DVBOpener,
-		adapterDetector: opts.AdapterDetector,
-		disableRuntime:  opts.DisableRuntime,
-		dvbRefreshGate:  make(chan struct{}, 1),
-		dvbDetected:     make([]model.DVBCard, 0),
-		dvbOwnership:    make(map[string]dvbCardOwnership),
-		dvbStale:        true,
-		streamIndexByID: make(map[string]int),
-		dvbStreamIDs:    make([]string, 0),
-		groupStreamIDs:  map[string][]string{"": {}},
-		runtime:         make(map[string]model.StreamRuntime),
-		softRuntime:     make(map[string]model.SoftcamRuntime),
-		softGenerations: make(map[string]uint64),
-		softcamTester:   opts.SoftcamTester,
-		adapterWork:     make(map[string]*adapterMonitorWorker),
-		adapterRT:       make(map[string]model.AdapterProfileRuntime),
-		subscribers:     make(map[int]chan model.StateSnapshot),
+		path:             path,
+		runtimeLifecycle: storeRuntimeLifecycle{dormant: true},
+		runtimeOptions:   opts,
+		started:          opts.Now().UTC(),
+		now:              opts.Now,
+		dvbOpener:        opts.DVBOpener,
+		adapterDetector:  opts.AdapterDetector,
+		disableRuntime:   opts.DisableRuntime,
+		dvbRefreshGate:   make(chan struct{}, 1),
+		dvbDetected:      make([]model.DVBCard, 0),
+		dvbOwnership:     make(map[string]dvbCardOwnership),
+		dvbStale:         true,
+		streamIndexByID:  make(map[string]int),
+		dvbStreamIDs:     make([]string, 0),
+		groupStreamIDs:   map[string][]string{"": {}},
+		runtime:          make(map[string]model.StreamRuntime),
+		softRuntime:      make(map[string]model.SoftcamRuntime),
+		softGenerations:  make(map[string]uint64),
+		softcamTester:    opts.SoftcamTester,
+		adapterWork:      make(map[string]*adapterMonitorWorker),
+		adapterRT:        make(map[string]model.AdapterProfileRuntime),
+		subscribers:      make(map[int]chan model.StateSnapshot),
 	}
 	s.dvbRefreshGate <- struct{}{}
 	if err := s.loadOrInit(); err != nil {
@@ -387,6 +403,11 @@ func NewWithOptions(path string, opts Options) (*Store, error) {
 	}
 	s.rebuildDVBIndexesLocked()
 	s.dvbLastSummary = summarizeDVBCards(s.mergeDVBCardsLocked())
+	return s, nil
+}
+
+func (s *Store) startRuntime() error {
+	activateDescramblingBuildBackend()
 	s.mu.Lock()
 	for _, stream := range s.config.Streams {
 		if stream.Enabled && descramblingEnabled(stream) {
@@ -399,12 +420,14 @@ func NewWithOptions(path string, opts Options) (*Store, error) {
 	}
 	s.mu.Unlock()
 
-	if !s.disableRuntime {
-		if err := s.initializeRuntime(opts); err != nil {
-			return nil, fmt.Errorf("initialize runtime: %w", err)
+	if !s.runtimeOptions.DisableRuntime {
+		if err := s.initializeRuntime(s.runtimeOptions); err != nil {
+			// initializeRuntime consumes partial dependencies on every failure path.
+			s.runtimeDeps, s.scheduler, s.engine, s.softcam = nil, nil, nil, nil
+			s.runtimeSink, s.streamer, s.epg = nil, nil, nil
+			return fmt.Errorf("initialize runtime: %w", err)
 		}
 	}
-
 	s.mu.Lock()
 	s.appendLogLocked("info", "store initialized")
 	streams := slices.Clone(s.config.Streams)
@@ -416,7 +439,7 @@ func NewWithOptions(path string, opts Options) (*Store, error) {
 		s.reconcileWorkers(streams)
 	}
 	s.broadcast()
-	return s, nil
+	return nil
 }
 
 func (s *Store) SetStreamerTLSConfig(cfg any) {
@@ -684,7 +707,7 @@ func (s *Store) Snapshot(logLimit int) model.StateSnapshot {
 }
 
 func (s *Store) broadcast() {
-	endRuntime, admissionErr := s.admitRuntime()
+	endRuntime, admissionErr := s.admitRuntimeStarting()
 	if admissionErr != nil {
 		return
 	}
@@ -1871,6 +1894,10 @@ func (s *Store) StartAdapterProfileMonitor(id string) (model.AdapterProfile, err
 		return model.AdapterProfile{}, admissionErr
 	}
 	defer endRuntime()
+	return s.startAdapterProfileMonitor(id)
+}
+
+func (s *Store) startAdapterProfileMonitor(id string) (model.AdapterProfile, error) {
 	s.mu.Lock()
 	idx := s.findAdapterProfileIndexLocked(id)
 	if idx < 0 {
@@ -2153,6 +2180,14 @@ func (s *Store) setSettings(in model.Settings, patch map[string]json.RawMessage)
 }
 
 func (s *Store) ListAdapters() []model.Adapter {
+	if err := s.requireActivated(); err != nil {
+		return nil
+	}
+	end, err := s.admitRuntime()
+	if err != nil {
+		return nil
+	}
+	defer end()
 	detected := s.adapterDetector.DetectRuntime()
 
 	s.mu.RLock()
@@ -2263,7 +2298,7 @@ func (s *Store) AddLog(level, message string) {
 }
 
 func (s *Store) reconcileWorkers(streams []model.Stream) {
-	endRuntime, admissionErr := s.admitRuntime()
+	endRuntime, admissionErr := s.admitRuntimeStarting()
 	if admissionErr != nil {
 		return
 	}
@@ -2358,7 +2393,7 @@ func (s *Store) reconcileLegacyDVBStream(stream model.Stream) {
 
 		s.engine.Stop(stream.ID)
 		if stream.AdapterProfileID != "" {
-			s.StartAdapterProfileMonitor(stream.AdapterProfileID)
+			s.startAdapterProfileMonitor(stream.AdapterProfileID)
 		}
 		s.mu.RLock()
 		runtime, exists := s.runtime[stream.ID]
@@ -2991,7 +3026,7 @@ func (s *Store) updateLegacyDVBStreamRuntime(expected model.Stream, prevPackets 
 }
 
 func (s *Store) reconcileSoftcamWorkers(_ []model.Softcam) {
-	end, err := s.admitRuntime()
+	end, err := s.admitRuntimeStarting()
 	if err != nil {
 		return
 	}

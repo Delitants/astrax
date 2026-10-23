@@ -69,11 +69,13 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 func (m *Manager) TLSConfigWithVersion(minVersion string) (*tls.Config, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, err := os.Stat(m.certPath); os.IsNotExist(err) {
+	_, certErr := os.Stat(m.certPath)
+	_, keyErr := os.Stat(m.keyPath)
+	if os.IsNotExist(certErr) && os.IsNotExist(keyErr) {
 		return nil, nil
 	}
-	if _, err := os.Stat(m.keyPath); os.IsNotExist(err) {
-		return nil, nil
+	if certErr != nil || keyErr != nil {
+		return nil, fmt.Errorf("incomplete certificate/key pair: cert=%v key=%v", certErr, keyErr)
 	}
 	cert, err := tls.LoadX509KeyPair(m.certPath, m.keyPath)
 	if err != nil {

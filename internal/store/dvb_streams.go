@@ -890,7 +890,7 @@ func (s *Store) BulkDVBStreams(request model.BulkDVBStreamRequest) (model.BulkDV
 }
 
 func (s *Store) runDVBStreamRuntimeActions(actions []dvbStreamRuntimeAction) {
-	end, err := s.admitRuntime()
+	end, err := s.admitRuntimeStarting()
 	if err != nil {
 		return
 	}

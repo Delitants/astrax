@@ -323,6 +323,12 @@ astrax_activate() {
         return 1
     fi
     echo 'AstraX service enabled and started'
+    echo 'Default management: http://127.0.0.1:8080 (local to the host; configured address may differ).'
+    echo 'For remote administration, use a private SSH tunnel to the host loopback address.'
+    echo '  ssh -L 8080:127.0.0.1:8080 USER@HOST'
+    echo 'Before first enrollment, read the owner-only setup file locally as root:'
+    echo '  /var/lib/astrax/astrax-config.json.admin-setup'
+    echo 'Enter its one-time secret in the setup page; the installer never prints the secret.'
 }
 
 if [ "${ASTRAX_CORE_LIBRARY_ONLY:-}" = 1 ]; then

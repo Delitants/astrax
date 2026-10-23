@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) Delitants
 
+import {csrfHeader, onUnauthorized, authGeneration} from './auth.js';
+
 export async function requestJSON(path, options = {}) {
   const {includeResponseText = false, ...fetchOptions} = options;
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  const method = (options.method || 'GET').toUpperCase();
+  if (!['GET','HEAD','OPTIONS'].includes(method) && csrfHeader()) headers.set('X-AstraX-CSRF',csrfHeader());
+  const started = authGeneration();
   const response = await fetch(path, {...fetchOptions, headers});
+  if (response.status === 401 && started === authGeneration()) onUnauthorized();
+  if (started !== authGeneration()) throw Object.assign(new Error('Administrator session expired'),{status:401});
   if (response.status === 204) return null;
   let body, text;
   try {
@@ -19,6 +26,7 @@ export async function requestJSON(path, options = {}) {
     if (response.ok || !(error instanceof SyntaxError)) throw error;
     body = null;
   }
+  if (started !== authGeneration()) throw Object.assign(new Error('Administrator session expired'),{status:401});
   if (!response.ok) {
     const detail = body?.error;
     const message = typeof detail === "string" ? detail : detail?.message;

@@ -6,7 +6,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AstraX</title>
-    <link rel="stylesheet" href="/app.css?v=26" />
+    <link rel="stylesheet" href="/app.css?v=27" />
     <link rel="stylesheet" href="/dvb-management.css?v=27" />
     <link rel="stylesheet" href="/api-management.css?v=1" />
   </head>
@@ -14,12 +14,39 @@
     <div class="orb orb-one"></div>
     <div class="orb orb-two"></div>
 
+    <main id="authView" class="auth-shell" aria-labelledby="authTitle">
+      <div class="auth-brand"><span class="auth-mark" aria-hidden="true">AX</span><span>AstraX / Management</span></div>
+      <section class="auth-card">
+        <p class="auth-eyebrow">Administrator access</p>
+        <h1 id="authTitle">Secure your control panel</h1>
+        <p class="auth-lede">Sign in to manage streams, adapters and settings. Management stays unavailable until your session is verified.</p>
+        <p class="auth-address">Connected management address <strong id="authManagementAddress"></strong></p>
+        <p id="authNotice" class="notice err" role="alert" aria-live="assertive" hidden></p>
+        <form id="authSetupForm" class="auth-form" hidden>
+          <h2>First-time setup</h2>
+          <p>On the AstraX host, read the owner-only file beside your config: <code>&lt;config-file&gt;.admin-setup</code>. The secret is never shown in this browser.</p>
+          <label>One-time setup secret<input name="secret" type="password" autocomplete="off" required /></label>
+          <label>New administrator password<input name="password" type="password" autocomplete="off" required minlength="12" /></label>
+          <label>Confirm password<input name="confirm_password" type="password" autocomplete="off" required minlength="12" /></label>
+          <button type="submit">Create administrator</button>
+        </form>
+        <form id="authLoginForm" class="auth-form" hidden>
+          <h2>Administrator login</h2>
+          <label>Password<input name="password" type="password" autocomplete="off" required /></label>
+          <button type="submit">Sign in</button>
+        </form>
+      </section>
+      <p class="auth-foot">AstraX / Local administrator</p>
+    </main>
+
+    <div id="dashboard" hidden>
+
     <header class="topbar">
       <div>
         <h1>AstraX</h1>
         <p class="sub">DVB Streaming Server</p>
       </div>
-      <div class="status-pill" id="statusPill" role="status">Loading...</div>
+      <div class="topbar-actions"><span class="management-address">Management: <strong id="managementAddress"></strong></span><div class="status-pill" id="statusPill" role="status">Loading...</div><button id="logoutButton" type="button" class="secondary">Sign out</button></div>
     </header>
     <p id="globalActionNotice" class="notice global-action-notice" role="status" aria-live="polite" hidden></p>
 
@@ -508,6 +535,16 @@
               <button type="button" id="deleteCertBtn" class="danger">Delete Certificates</button>
             </div>
           </fieldset>
+          <div class="section-divider"></div>
+          <form id="changePasswordForm" class="auth-form password-form">
+            <h2>Administrator password</h2>
+            <p class="hint">Changing the password signs out every active session.</p>
+            <label>Current password<input name="old_password" type="password" autocomplete="off" required /></label>
+            <label>New password<input name="new_password" type="password" autocomplete="off" required minlength="12" /></label>
+            <label>Confirm new password<input name="confirm_password" type="password" autocomplete="off" required minlength="12" /></label>
+            <p id="passwordNotice" role="alert" aria-live="assertive"></p>
+            <button type="submit">Change password</button>
+          </form>
         </article>
 
         <article data-panel="logs" class="panel">
@@ -1169,6 +1206,7 @@
         <div class="dialog-actions"><p id="apiTokenCopyNotice" class="notice" role="status" hidden></p><button id="apiTokenSecretClose" type="button" class="secondary">Done</button><button id="apiTokenCopy" type="button">Copy token</button></div>
       </div>
     </dialog>
-    <script type="module" src="/app.js?v=38"></script>
+    </div>
+    <script type="module" src="/app.js?v=39"></script>
   </body>
 </html>

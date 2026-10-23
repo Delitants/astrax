@@ -226,17 +226,18 @@ type LogEntry struct {
 }
 
 type Config struct {
-	APITokens       []APITokenRecord `json:"api_tokens,omitempty"`
-	SchemaVersion   int              `json:"schema_version,omitempty"`
-	Version         string           `json:"version"`
-	CreatedAt       time.Time        `json:"created_at"`
-	UpdatedAt       time.Time        `json:"updated_at"`
-	Streams         []Stream         `json:"streams"`
-	DVBGroups       []DVBGroup       `json:"dvb_groups,omitempty"`
-	DVBCards        []DVBCardConfig  `json:"dvb_cards,omitempty"`
-	Softcams        []Softcam        `json:"softcams,omitempty"`
-	AdapterProfiles []AdapterProfile `json:"adapter_profiles,omitempty"`
-	Settings        Settings         `json:"settings"`
+	APITokens            []APITokenRecord `json:"api_tokens,omitempty"`
+	AdminAuthInitialized bool             `json:"admin_auth_initialized,omitempty"`
+	SchemaVersion        int              `json:"schema_version,omitempty"`
+	Version              string           `json:"version"`
+	CreatedAt            time.Time        `json:"created_at"`
+	UpdatedAt            time.Time        `json:"updated_at"`
+	Streams              []Stream         `json:"streams"`
+	DVBGroups            []DVBGroup       `json:"dvb_groups,omitempty"`
+	DVBCards             []DVBCardConfig  `json:"dvb_cards,omitempty"`
+	Softcams             []Softcam        `json:"softcams,omitempty"`
+	AdapterProfiles      []AdapterProfile `json:"adapter_profiles,omitempty"`
+	Settings             Settings         `json:"settings"`
 }
 
 type Status struct {
@@ -271,7 +272,7 @@ func DefaultSettings() Settings {
 		DisableTLS:              false,
 		PlaylistName:            "playlist",
 		LogLevel:                "info",
-		ControlListen:           "0.0.0.0:8080",
+		ControlListen:           "127.0.0.1:8080",
 		ControlListenHTTPS:      "0.0.0.0:8443",
 		RedirectHTTPS:           false,
 		TLSMinVersion:           "1.2",
