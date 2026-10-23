@@ -54,8 +54,14 @@ non-serving V11 Linux amd64 build. Root-owned QA evidence reported executable
 SHA-256 `81cf58aec5684567cdbbd312ac982337a639bfa9b5368a3704318b2c00e1b515`
 and private SRT SHA-256
 `3ee97016e9865d1116ba9c504a0d719747d6a85602c5f956bc02d632daae3bba`.
-Those binaries have not been retrieved or qualified for installation. Do not
-relabel or modify a held layout in place to imply distribution readiness.
+The exact V11 binary and private SRT library were later retrieved and matched
+against the held layout. A V12 held layout changed only the third-party notice;
+its source and notice identities passed a local technical audit. Neither layout
+is qualified for installation or distribution. The current systemd template
+now uses `Type=exec` rather than the V12 payload's `Type=simple`, so any future
+production installer needs a fresh identity-bound source/layout build and
+native lifecycle QA. Do not relabel or modify a held layout in place to imply
+distribution readiness.
 
 ## Management-auth source candidate
 
@@ -78,9 +84,11 @@ browser composition also passed one Playwright attempt. A later source review
 identified management SSE revocation and save-then-restart admission defects,
 so this held ELF is not the final production candidate. The corrected source
 has passed offline Mac Go checks and produced the non-serving V11 Linux build
-described above. That build did not execute the candidate. Source/notice
-closure, candidate runtime and installed-service QA, and live admission remain
-separate gates.
+described above. The exact V11 executable later passed one isolated
+private-loopback startup/auth/restart smoke; a focused two-test Mac race check
+passed while the earlier full race suite remains RED. Source/notice closure,
+installed-service QA, live admission and release authorization remain separate
+gates.
 
 ## Held first-production candidate (not an installer identity)
 

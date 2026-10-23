@@ -327,7 +327,7 @@ astrax_activate() {
         echo 'AstraX service failed to start' >&2
         return 1
     fi
-    echo 'AstraX service enabled and started'
+    echo 'AstraX service enable/start command succeeded; verify service health before use'
     echo 'Default management: http://127.0.0.1:8080 (local to the host; configured address may differ).'
     echo 'For remote administration, use a private SSH tunnel to the host loopback address.'
     echo '  ssh -L 8080:127.0.0.1:8080 USER@HOST'

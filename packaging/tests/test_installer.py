@@ -317,6 +317,17 @@ class InstallerCoreTests(unittest.TestCase):
         self.assertIn("ssh -L 8080:127.0.0.1:8080 USER@HOST", result.stdout)
         self.assertNotIn("one-time secret:", result.stdout.lower())
 
+    def test_systemd_start_reports_exec_not_application_readiness(self):
+        template = (self.repo / "packaging/init/systemd.in").read_text()
+        self.assertIn("Type=exec\n", template)
+        self.assertNotIn("Type=simple\n", template)
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        result = self.run_core("astrax_activate")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("verify service health", result.stdout.lower())
+        self.assertNotIn("service enabled and started", result.stdout.lower())
+
     def test_activation_refuses_modified_executable(self):
         self.configure_init("systemd")
         self.assertEqual(self.run_core("astrax_install").returncode, 0)
