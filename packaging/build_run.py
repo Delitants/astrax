@@ -232,6 +232,17 @@ def _build_run(
     if private_install_qa and ("PRIVATE-INSTALL-QA" not in output.name or not output.name.endswith(".run")):
         raise ValueError("private install QA output name must contain PRIVATE-INSTALL-QA and end in .run")
     manifest = validate_release(release_dir, identity=identity, qa_only=qa_only, private_install_qa=private_install_qa)
+    identity = APPROVED_IDENTITY if identity is None else identity
+
+    def pinned_source(name: str) -> str:
+        expected = identity["required_source_sha256"].get(name)
+        if name not in identity["required_source_paths"] or not expected:
+            raise ValueError(f"embedded installer source is not pinned: {name}")
+        data = (release_dir / name).read_bytes()
+        if hashlib.sha256(data).hexdigest() != expected:
+            raise ValueError(f"embedded installer source hash mismatch: {name}")
+        return data.decode("utf-8")
+
     members = sorted(["MANIFEST.json", SONAME] + [entry["path"] for entry in manifest["files"]])
     hashes = {entry["path"]: entry["sha256"] for entry in manifest["files"]}
     hashes["MANIFEST.json"] = _hash_file(release_dir / "MANIFEST.json")
@@ -240,14 +251,10 @@ def _build_run(
             raise ValueError(f"unsupported archive name: {name}")
     output.parent.mkdir(parents=True, exist_ok=True)
     header_name = "qa_extract_header.sh" if qa_only else "installer_header.sh"
-    header = Path(__file__).with_name(header_name).read_text()
+    header = pinned_source(f"share/build/{header_name}")
     if not qa_only:
-        core_path = Path(__file__).with_name("installer_core.sh")
-        core = core_path.read_text() if core_path.exists() else ""
-        templates = {}
-        for init in ("systemd", "openrc", "sysv"):
-            template_path = Path(__file__).with_name("init") / f"{init}.in"
-            templates[init] = template_path.read_text() if template_path.exists() else ""
+        core = pinned_source("share/build/installer_core.sh")
+        templates = {init: pinned_source(f"share/build/init/{init}.in") for init in ("systemd", "openrc", "sysv")}
     with tempfile.TemporaryDirectory(dir=output.parent) as scratch:
         payload = build_payload(
             release_dir, Path(scratch) / "payload.tar.gz", identity=identity,
@@ -258,7 +265,7 @@ def _build_run(
         header = header.replace("@TYPES@", "\n".join("l" if name == SONAME else "-" for name in members))
         header = header.replace("@HASHES@", "\n".join(f"{name}:{hashes[name]}" for name in members if name != SONAME))
         header = header.replace("@PRIVATE_INSTALL_QA@", "1" if private_install_qa else "0")
-        header = header.replace("@RELEASE_TARGET@", "" if private_install_qa else (identity or APPROVED_IDENTITY)["target_profile"])
+        header = header.replace("@RELEASE_TARGET@", "" if private_install_qa else identity["target_profile"])
         if not qa_only:
             for init, contents in templates.items():
                 header = header.replace(f"@{init.upper()}@", contents.replace("'", "'\"'\"'"))

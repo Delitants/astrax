@@ -18,10 +18,15 @@ import (
 // runtime/settings gate as full replacement, so concurrent sections cannot
 // overwrite each other's acknowledged updates.
 func (s *Store) PatchSettings(fields map[string]json.RawMessage) (model.Settings, error) {
+	return s.PatchSettingsWithValidation(fields, nil)
+}
+
+// PatchSettingsWithValidation validates the merged candidate before it is saved.
+func (s *Store) PatchSettingsWithValidation(fields map[string]json.RawMessage, validate func(model.Settings) error) (model.Settings, error) {
 	if len(fields) == 0 {
 		return model.Settings{}, errors.New("settings patch must contain at least one field")
 	}
-	return s.setSettings(model.Settings{}, fields)
+	return s.setSettings(model.Settings{}, fields, validate)
 }
 
 func applySettingsPatch(in model.Settings, fields map[string]json.RawMessage) (model.Settings, error) {

@@ -427,6 +427,8 @@ class InstallerCoreTests(unittest.TestCase):
         group = "astrax:x:997:"
         for passwd, group_entry, accepted in (
             (valid, group, True),
+            ("astrax:x:0:997::/var/lib/astrax:/usr/sbin/nologin", group, False),
+            ("astrax:x:997:0::/var/lib/astrax:/usr/sbin/nologin", "astrax:x:0:", False),
             (valid.replace(":997:997:", ":1001:997:"), group, False),
             (valid, "astrax:x:998:", False),
             (valid.replace("/usr/sbin/nologin", "/bin/sh"), group, False),

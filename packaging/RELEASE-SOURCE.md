@@ -11,17 +11,19 @@ OpenRC installation used only a synthetic init marker. Neither OpenRC nor
 SysV is a qualified first-release target. The installer source retains both
 templates for future validation; the public builder pins Ubuntu 24.04/systemd
 and the distributable `.run` rejects other targets at install and activation.
-Do not advertise OpenRC or SysV as supported yet. The owner approved
-publication of the exact frozen Ubuntu 24.04 amd64 binary candidate after
-one isolated installer QA. This is not approval for production deployment,
-live DVB/softcam use, or service activation on an operating host.
+Do not advertise OpenRC or SysV as supported yet. The existing preview is
+public, but publication of a future production release remains held. Isolated
+installer QA is not approval for production deployment, live DVB/softcam use,
+or service activation on an operating host.
 
 The self-extracting `.run` includes shell code from `installer_header.sh`,
 `installer_core.sh`, and `init/*.in`. A binary release must ship the exact
 installer source from the commit used to build that `.run`, in addition to
 the AstraX, Go, SRT, libdvbcsa, x/text, patch, and notice sources recorded
-in its payload. The public source snapshot alone is not the corresponding
-source package for the frozen Linux executable.
+in its payload. The builder reads shell code and init templates from the
+hash-pinned release payload, not its own checkout; a layout without those
+exact shipped sources is refused. The public source snapshot alone is not
+the corresponding source package for the frozen Linux executable.
 
 The published preview executable was built from AstraX source commit `6544bd0`.
 It does not contain the new management authentication. The current
@@ -44,10 +46,10 @@ python3 -B share/build/recipient_build.py share/source \
 
 The output directory must not exist and remains private to the invoking
 user. A rebuild need not match a prior ELF byte for byte; compare its source,
-build metadata, ABI, and behavior instead. The earlier recipient-mode Linux
-build covered the `6544bd0` stage only. The new `f9545f6` stage has passed
-local hash and archive checks, not a Linux build. Do not relabel or modify a
-held layout in place to imply distribution readiness.
+build metadata, ABI, and behavior instead. The `f9545f6` stage produced a
+held binary in an isolated Linux amd64 build and passed local hash and archive
+checks. Do not relabel or modify a held layout in place to imply distribution
+readiness.
 
 ## Management-auth source candidate
 
@@ -60,8 +62,37 @@ SHA-256 values, the source `go.mod` and `go.sum`, and each ZIP's `LICENSE` and
 populate a file-only Go module proxy. It rejects an incomplete auth module set.
 The new source archive and held stage manifest are pinned to commit `f9545f6`.
 They do not change the published preview binary or its release identity.
-The first-production binary, installer payload, full source/notice closure,
-native QA, and live admission remain separate gates.
+An isolated Linux amd64 build produced a held first-production candidate, and
+one private-loopback setup/auth/restart smoke passed. Exact-v3 synthetic
+browser composition also passed one Playwright attempt. A later source review
+identified management SSE revocation and save-then-restart admission defects,
+so this held ELF is not the final production candidate. Source/notice closure,
+full-suite and installed-service QA, live admission, and a rebuild after those
+fixes remain separate gates.
+
+## Held first-production candidate (not an installer identity)
+
+The current held candidate is the ELF with SHA-256
+`03e1c50d1b2261958e11b47ea4135f896205fc00d5eae08d8273968f91df234a`;
+its private SRT library has SHA-256
+`95e5cecc8c5b60cf1c7e4e3d00f27ddbb988f1fd501414fc9db36b5469ac1414`.
+The application source commit is
+`f9545f6f3d00028f461755ad26f934af20f0583e`, with build-source archive
+SHA-256 `7d6548dd2c5e9488a86b1c9d9f3ec1a0c6c429143ba72ff846109c01b2558618`.
+The separately committed recipient recipe is `dad96afeae1f59c1ce9c70d7f34d67620bcccba5`
+(recipe SHA-256 `95bbce3c8b53005c63f32800ba04f9670e234bdcfb78a48f4eef7994ae792f9f`).
+The build used Go 1.26.9, `dvbcsa`, and `x/crypto v0.55.0`, `x/sys v0.47.0`,
+and `x/text v0.41.0`.
+
+These pins are evidence, not `build_run.py`'s `APPROVED_IDENTITY`: that
+constant intentionally remains the published preview's identity. Do not
+relabel the preview layout or build a first-production `.run` with it. A new
+candidate-specific recipient layout must bind the final tracked source and
+recipe, source-stage manifest, dependency archives, notices, and exact
+binary/library hashes before an installer can be constructed. Keep its
+distribution, publication, and production flags false until separately
+cleared. Private-loopback candidate QA is not installed-systemd, DVB/CCcam,
+or production acceptance.
 
 The new management listener defaults to `http://127.0.0.1:8080`, accessible on
 the host only. From a workstation, use a private tunnel such as

@@ -11,14 +11,25 @@ import unittest
 from packaging.build_run import APPROVED_IDENTITY, build_payload as _build_payload, validate_release as _validate_release
 
 
+PACKAGING_DIR = Path(__file__).resolve().parents[1]
+EMBEDDED_SOURCES = {
+    "share/build/installer_header.sh": PACKAGING_DIR / "installer_header.sh",
+    "share/build/qa_extract_header.sh": PACKAGING_DIR / "qa_extract_header.sh",
+    "share/build/installer_core.sh": PACKAGING_DIR / "installer_core.sh",
+    **{f"share/build/init/{name}.in": PACKAGING_DIR / "init" / f"{name}.in" for name in ("systemd", "openrc", "sysv")},
+}
+
 TEST_IDENTITY = {
     "binary_sha256": hashlib.sha256(b"\x7fELFsynthetic-astrax").hexdigest(),
     "srt_sha256": hashlib.sha256(b"\x7fELFsynthetic-srt").hexdigest(),
     "source_commit": "synthetic",
     "source_sha256": hashlib.sha256(b"Synthetic source\n").hexdigest(),
     "source_path": "share/source/README.txt",
-    "required_source_paths": ["share/source/README.txt", "share/source/dependency.tar.gz"],
-    "required_source_sha256": {"share/source/dependency.tar.gz": hashlib.sha256(b"Synthetic dependency\n").hexdigest()},
+    "required_source_paths": ["share/source/README.txt", "share/source/dependency.tar.gz", *EMBEDDED_SOURCES],
+    "required_source_sha256": {
+        "share/source/dependency.tar.gz": hashlib.sha256(b"Synthetic dependency\n").hexdigest(),
+        **{name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in EMBEDDED_SOURCES.items()},
+    },
     "required_notice_paths": ["share/notices/THIRD-PARTY.txt"],
     "target_profile": "ubuntu-24.04-amd64-systemd",
 }
@@ -40,6 +51,7 @@ def make_release(root: Path, *, cleared: bool = True, publication: bool | None =
         "share/notices/THIRD-PARTY.txt": b"Synthetic notice\n",
         "share/source/README.txt": b"Synthetic source\n",
         "share/source/dependency.tar.gz": b"Synthetic dependency\n",
+        **{name: path.read_bytes() for name, path in EMBEDDED_SOURCES.items()},
     }
     status = {
         "distribution_cleared": cleared,
@@ -127,6 +139,59 @@ class ReleaseGateTests(unittest.TestCase):
         status_path.write_text(json.dumps(status) + "\n")
         with self.assertRaisesRegex(ValueError, "private_install_qa"):
             build_private_install_qa_run(held, self.base / "rejected-PRIVATE-INSTALL-QA.run", identity=TEST_IDENTITY)
+
+    def test_private_install_builder_refuses_unqualified_candidate_or_open_closure(self):
+        from packaging.build_run import build_private_install_qa_run
+
+        for field, value in (
+            ("candidate_qualified", False),
+            ("source_closure", "held"),
+            ("notice_closure", "held"),
+        ):
+            with self.subTest(field=field):
+                held = make_release(self.base / f"held-{field}", cleared=False)
+                status_path = held / "STATUS.json"
+                status = json.loads(status_path.read_text())
+                status[field] = value
+                status_path.write_text(json.dumps(status) + "\n")
+                with self.assertRaisesRegex(ValueError, field):
+                    build_private_install_qa_run(
+                        held, self.base / f"rejected-{field}-PRIVATE-INSTALL-QA.run",
+                        identity=TEST_IDENTITY,
+                    )
+
+    def test_installer_embeds_the_hash_pinned_shipped_header(self):
+        from packaging.build_run import build_run
+
+        name = "share/build/installer_header.sh"
+        shipped = self.release / name
+        contents = shipped.read_bytes().replace(b"set -eu\n", b"# shipped-header-marker\nset -eu\n", 1)
+        shipped.write_bytes(contents)
+        digest = hashlib.sha256(contents).hexdigest()
+        manifest_path = self.release / "MANIFEST.json"
+        manifest = json.loads(manifest_path.read_text())
+        entry = next(item for item in manifest["files"] if item["path"] == name)
+        entry["sha256"], entry["size"] = digest, len(contents)
+        manifest_path.write_text(json.dumps(manifest) + "\n")
+        identity = {
+            **TEST_IDENTITY,
+            "required_source_sha256": {**TEST_IDENTITY["required_source_sha256"], name: digest},
+        }
+        output = self.base / "astrax.run"
+        build_run(self.release, output, identity=identity)
+        self.assertIn(b"# shipped-header-marker", output.read_bytes().split(b"__ASTRAX_PAYLOAD_BELOW__\n", 1)[0])
+
+    def test_installer_refuses_unpinned_embedded_core(self):
+        from packaging.build_run import build_run
+
+        name = "share/build/installer_core.sh"
+        identity = {
+            **TEST_IDENTITY,
+            "required_source_paths": [path for path in TEST_IDENTITY["required_source_paths"] if path != name],
+            "required_source_sha256": {path: digest for path, digest in TEST_IDENTITY["required_source_sha256"].items() if path != name},
+        }
+        with self.assertRaisesRegex(ValueError, "embedded installer source is not pinned"):
+            build_run(self.release, self.base / "astrax.run", identity=identity)
 
     def test_missing_corresponding_source_is_refused(self):
         (self.release / "share/source/README.txt").unlink()

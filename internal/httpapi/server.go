@@ -442,7 +442,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
 		}
-		settings, err := s.store.SetSettings(in)
+		settings, err := s.store.SetSettingsWithValidation(in, s.validateManagementSettings)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
@@ -454,7 +454,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
 		}
-		settings, err := s.store.PatchSettings(fields)
+		settings, err := s.store.PatchSettingsWithValidation(fields, s.validateManagementSettings)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return

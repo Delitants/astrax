@@ -1,0 +1,93 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) Delitants
+
+package httpapi
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+type firstFlushRecorder struct {
+	*httptest.ResponseRecorder
+	firstFlush chan struct{}
+	once       sync.Once
+}
+
+func (w *firstFlushRecorder) Flush() {
+	w.ResponseRecorder.Flush()
+	w.once.Do(func() { close(w.firstFlush) })
+}
+
+func waitForSSE(t *testing.T, signal <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(5 * time.Second):
+		t.Fatal("SSE stream did not advance")
+	}
+}
+
+func TestManagementSSEStopsAfterSessionRevocation(t *testing.T) {
+	for _, path := range []string{"/api/v1/events", "/api/v1/events?snapshot=1"} {
+		for _, revoke := range []string{"logout", "password change"} {
+			t.Run(path+"/"+revoke, func(t *testing.T) {
+				s, m, session := managementAuthFixture(t)
+				r := managementTestRequest(t, s, rawManagementRequest(http.MethodGet, path, nil))
+				ctx, cancel := context.WithCancel(r.Context())
+				defer cancel()
+				r = r.WithContext(ctx)
+				w := &firstFlushRecorder{ResponseRecorder: httptest.NewRecorder(), firstFlush: make(chan struct{})}
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					s.Handler().ServeHTTP(w, r)
+				}()
+				waitForSSE(t, w.firstFlush)
+				if revoke == "logout" {
+					m.Logout(session.Token)
+				} else if err := m.ChangePassword(session.Token, testAdminPassword, "Another-strong-password_2026!"); err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(path, "snapshot=1") {
+					s.store.AddLog("info", "after revocation")
+				} else {
+					s.store.PublishEvent("logs.created", "after-revocation", map[string]string{"message": "after revocation"})
+				}
+				waitForSSE(t, done)
+				body := w.Body.String()
+				if strings.Contains(body, "after-revocation") || strings.Contains(body, "after revocation") {
+					t.Fatalf("revoked stream emitted an event: %s", body)
+				}
+			})
+		}
+	}
+}
+
+func TestManagementSSEChecksSessionBeforeKeepAlive(t *testing.T) {
+	s, m, session := managementAuthFixture(t)
+	r := managementTestRequest(t, s, rawManagementRequest(http.MethodGet, "/api/v1/events", nil))
+	w := httptest.NewRecorder()
+	events := make(chan struct{})
+	ticks := make(chan time.Time, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		streamEventChannelWithKeepAlive(w, r, events, func() bool {
+			return m.SessionActive(session.Token)
+		}, func() bool {
+			return m.SessionValid(session.Token)
+		}, func(struct{}) (bool, error) { return false, nil }, ticks)
+	}()
+	m.Logout(session.Token)
+	ticks <- time.Now()
+	waitForSSE(t, done)
+	if strings.Contains(w.Body.String(), "keepalive") {
+		t.Fatal("revoked stream emitted keepalive")
+	}
+}

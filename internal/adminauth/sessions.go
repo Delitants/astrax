@@ -122,26 +122,43 @@ func (m *Manager) Login(source, password string) (Session, error) {
 	return Session{Token: token, CSRFToken: m.csrfToken(token), IdleExpiresAt: record.idleExpiresAt, ExpiresAt: record.expiresAt}, nil
 }
 
-func (m *Manager) verifySessionLocked(token string) (Session, bool) {
-	if !m.stateCurrentLocked() || len(token) != 43 {
-		return Session{}, false
+func (m *Manager) sessionRecordLocked(token string, now time.Time) ([32]byte, sessionRecord, bool) {
+	if m.closed || len(token) != 43 {
+		return [32]byte{}, sessionRecord{}, false
 	}
 	key := tokenDigest(token)
 	record, ok := m.sessions[key]
 	if !ok {
-		return Session{}, false
+		return [32]byte{}, sessionRecord{}, false
 	}
-	now := m.now().UTC()
 	if !now.Before(record.idleExpiresAt) || !now.Before(record.expiresAt) {
 		delete(m.sessions, key)
+		return [32]byte{}, sessionRecord{}, false
+	}
+	return key, record, true
+}
+
+func (m *Manager) sessionLocked(token string, refresh bool) (Session, bool) {
+	now := m.now().UTC()
+	key, record, ok := m.sessionRecordLocked(token, now)
+	if !ok {
 		return Session{}, false
 	}
-	record.idleExpiresAt = now.Add(sessionIdleTTL)
-	if record.idleExpiresAt.After(record.expiresAt) {
-		record.idleExpiresAt = record.expiresAt
+	if refresh {
+		record.idleExpiresAt = now.Add(sessionIdleTTL)
+		if record.idleExpiresAt.After(record.expiresAt) {
+			record.idleExpiresAt = record.expiresAt
+		}
+		m.sessions[key] = record
 	}
-	m.sessions[key] = record
 	return Session{Token: token, CSRFToken: m.csrfToken(token), IdleExpiresAt: record.idleExpiresAt, ExpiresAt: record.expiresAt}, true
+}
+
+func (m *Manager) verifySessionLocked(token string) (Session, bool) {
+	if !m.stateCurrentLocked() {
+		return Session{}, false
+	}
+	return m.sessionLocked(token, true)
 }
 
 // VerifySession refreshes the idle lifetime without extending its absolute lifetime.
@@ -149,6 +166,26 @@ func (m *Manager) VerifySession(token string) (Session, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.verifySessionLocked(token)
+}
+
+// SessionValid checks durable state, revocation, and expiry without idle refresh.
+func (m *Manager) SessionValid(token string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.stateCurrentLocked() {
+		return false
+	}
+	_, ok := m.sessionLocked(token, false)
+	return ok
+}
+
+// SessionActive checks in-memory revocation and expiry without disk I/O or idle refresh.
+// Streaming callers must also use SessionValid periodically to detect state-file changes.
+func (m *Manager) SessionActive(token string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, _, ok := m.sessionRecordLocked(token, m.now().UTC())
+	return ok
 }
 
 func (m *Manager) Logout(token string) {

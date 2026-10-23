@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"astrax/internal/adapters"
+	"astrax/internal/adminauth"
 	"astrax/internal/dvb"
 	"astrax/internal/engine"
 	"astrax/internal/epg"
@@ -2046,10 +2047,17 @@ func (s *Store) Settings() model.Settings {
 }
 
 func (s *Store) SetSettings(in model.Settings) (model.Settings, error) {
-	return s.setSettings(in, nil)
+	return s.setSettings(in, nil, nil)
 }
 
-func (s *Store) setSettings(in model.Settings, patch map[string]json.RawMessage) (model.Settings, error) {
+// SetSettingsWithValidation checks the normalized candidate under the settings
+// gate before persistence. The management API supplies its startup admission
+// check here; direct Store callers still receive the plaintext safety check.
+func (s *Store) SetSettingsWithValidation(in model.Settings, validate func(model.Settings) error) (model.Settings, error) {
+	return s.setSettings(in, nil, validate)
+}
+
+func (s *Store) setSettings(in model.Settings, patch map[string]json.RawMessage, validate func(model.Settings) error) (model.Settings, error) {
 	endRuntime, admissionErr := s.admitRuntime()
 	if admissionErr != nil {
 		return model.Settings{}, admissionErr
@@ -2094,6 +2102,17 @@ func (s *Store) setSettings(in model.Settings, patch map[string]json.RawMessage)
 	}
 	if in.EPGSourceRetentionHours < 1 || in.EPGSourceRetentionHours > 168 {
 		return model.Settings{}, errors.New("epg_source_retention_hours must be between 1 and 168")
+	}
+	if in.TLSMinVersion != "" && in.TLSMinVersion != "1.2" && in.TLSMinVersion != "1.3" {
+		return model.Settings{}, errors.New("management tls_min_version must be 1.2 or 1.3")
+	}
+	if _, err := adminauth.AdmitManagement(in.ControlListen, "", false, nil, false); err != nil {
+		return model.Settings{}, err
+	}
+	if validate != nil {
+		if err := validate(in); err != nil {
+			return model.Settings{}, err
+		}
 	}
 
 	s.mu.Lock()

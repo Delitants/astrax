@@ -92,6 +92,66 @@ func TestAdminSessionsIdleAndAbsoluteExpiry(t *testing.T) {
 	}
 }
 
+func TestAdminSessionValidDoesNotRefreshIdleExpiry(t *testing.T) {
+	m := enrolledTestManager(t)
+	base := time.Now().UTC()
+	now := base
+	m.now = func() time.Time { return now }
+	session, err := m.Login("source", testPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = base.Add(sessionIdleTTL / 2)
+	if !m.SessionActive(session.Token) || !m.SessionValid(session.Token) {
+		t.Fatal("active session rejected")
+	}
+	now = base.Add(sessionIdleTTL)
+	if m.SessionActive(session.Token) || m.SessionValid(session.Token) {
+		t.Fatal("validity check extended idle lifetime")
+	}
+}
+
+func TestAdminSessionActiveObservesRevocationAndEviction(t *testing.T) {
+	m := enrolledTestManager(t)
+	first, err := m.Login("first", testPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= maxSessions; i++ {
+		if _, err := m.Login(fmt.Sprintf("source-%d", i), testPassword); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if m.SessionActive(first.Token) {
+		t.Fatal("evicted session accepted")
+	}
+	current, err := m.Login("current", testPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Logout(current.Token)
+	if m.SessionActive(current.Token) {
+		t.Fatal("logged-out session accepted")
+	}
+}
+
+func TestAdminSessionActiveRequiresPeriodicStateCheck(t *testing.T) {
+	m := enrolledTestManager(t)
+	session, err := m.Login("source", testPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(StatePath(m.configPath), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !m.SessionActive(session.Token) {
+		t.Fatal("in-memory check unexpectedly read the state file")
+	}
+	if m.SessionValid(session.Token) || m.SessionActive(session.Token) {
+		t.Fatal("full state check did not fail closed")
+	}
+}
+
 func TestAdminSessionsRateLimits(t *testing.T) {
 	m := enrolledTestManager(t)
 	for i := 0; i < sourceLoginLimit; i++ {

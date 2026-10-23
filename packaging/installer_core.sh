@@ -29,7 +29,8 @@ astrax_account_entry_compatible() {
     group_gid=$(printf '%s\n' "$group" | cut -d: -f3)
     case "$uid:$gid:$group_gid" in *[!0-9:]*|:*) return 1 ;; esac
     [ "$name" = astrax ] && [ "$group_name" = astrax ] &&
-        [ "$uid" -lt 1000 ] && [ "$gid" = "$group_gid" ] &&
+        [ "$uid" -gt 0 ] && [ "$uid" -lt 1000 ] &&
+        [ "$gid" -gt 0 ] && [ "$gid" = "$group_gid" ] &&
         [ "$home" = /var/lib/astrax ] || return 1
     case "$shell" in */nologin) return 0 ;; *) return 1 ;; esac
 }

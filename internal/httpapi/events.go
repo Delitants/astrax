@@ -38,8 +38,17 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "streaming is not supported"})
 		return
 	}
+	cookie, err := r.Cookie(managementCookieName)
+	if err != nil {
+		return
+	}
+	fullValid := func() bool { return s.auth.SessionValid(cookie.Value) }
+	active := func() bool { return s.auth.SessionActive(cookie.Value) }
+	if !fullValid() {
+		return
+	}
 	if legacy {
-		s.handleSnapshotEvents(w, r, external)
+		s.handleSnapshotEvents(w, r, external, active, fullValid)
 		return
 	}
 
@@ -50,6 +59,9 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	defer s.store.UnsubscribeEvents(id)
 	setEventHeaders(w)
+	if !fullValid() {
+		return
+	}
 	if err := sendEventFrame(w, func() error {
 		return writeSSE(w, "ready", struct {
 			Revision uint64 `json:"revision"`
@@ -58,12 +70,12 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	streamEventChannel(w, r, ch, func(event model.ResourceEvent) (bool, error) {
+	streamEventChannel(w, r, ch, active, fullValid, func(event model.ResourceEvent) (bool, error) {
 		return event.Kind == "resync_required", writeResourceEvent(w, event)
 	})
 }
 
-func (s *Server) handleSnapshotEvents(w http.ResponseWriter, r *http.Request, external bool) {
+func (s *Server) handleSnapshotEvents(w http.ResponseWriter, r *http.Request, external bool, active, fullValid func() bool) {
 	id, ch := s.store.Subscribe(32)
 	if id < 0 {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Error: "event service is closed"})
@@ -77,17 +89,24 @@ func (s *Server) handleSnapshotEvents(w http.ResponseWriter, r *http.Request, ex
 		}
 		return writeSSE(w, "snapshot", snapshot)
 	}
+	if !fullValid() {
+		return
+	}
 	if err := sendEventFrame(w, func() error { return writeSnapshot(s.store.Snapshot(120)) }); err != nil {
 		return
 	}
-	streamEventChannel(w, r, ch, func(snapshot model.StateSnapshot) (bool, error) {
+	streamEventChannel(w, r, ch, active, fullValid, func(snapshot model.StateSnapshot) (bool, error) {
 		return false, writeSnapshot(snapshot)
 	})
 }
 
-func streamEventChannel[T any](w http.ResponseWriter, r *http.Request, ch <-chan T, write func(T) (bool, error)) {
+func streamEventChannel[T any](w http.ResponseWriter, r *http.Request, ch <-chan T, active, fullValid func() bool, write func(T) (bool, error)) {
 	keepAlive := time.NewTicker(10 * time.Second)
 	defer keepAlive.Stop()
+	streamEventChannelWithKeepAlive(w, r, ch, active, fullValid, write, keepAlive.C)
+}
+
+func streamEventChannelWithKeepAlive[T any](w http.ResponseWriter, r *http.Request, ch <-chan T, active, fullValid func() bool, write func(T) (bool, error), keepAlive <-chan time.Time) {
 	for {
 		if r.Context().Err() != nil {
 			return
@@ -99,6 +118,9 @@ func streamEventChannel[T any](w http.ResponseWriter, r *http.Request, ch <-chan
 			if !ok {
 				return
 			}
+			if !active() {
+				return
+			}
 			var terminal bool
 			if err := sendEventFrame(w, func() (err error) {
 				terminal, err = write(event)
@@ -106,7 +128,10 @@ func streamEventChannel[T any](w http.ResponseWriter, r *http.Request, ch <-chan
 			}); err != nil || terminal {
 				return
 			}
-		case <-keepAlive.C:
+		case <-keepAlive:
+			if !fullValid() {
+				return
+			}
 			if err := sendEventKeepAlive(w); err != nil {
 				return
 			}
