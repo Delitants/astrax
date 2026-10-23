@@ -104,6 +104,41 @@ func TestAuthStateCrashBeforeMarkerReusesIdentity(t *testing.T) {
 	}
 }
 
+func TestAuthStateRestartAfterEnrollmentBeforeSetupRemoval(t *testing.T) {
+	config, first, secret := newTestManager(t)
+	first.Close()
+	salt, err := randomSalt()
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrolled := authState{
+		Version:      stateVersion,
+		Phase:        "enrolled",
+		PasswordSalt: encode(salt),
+		PasswordHash: encode(hashSecret(testPassword, salt)),
+	}
+	if err := persistState(config, enrolled); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(SetupSecretPath(config)); err != nil {
+		t.Fatalf("crash fixture lost the leftover setup file: %v", err)
+	}
+	restarted, err := Open(config, true)
+	if err != nil {
+		t.Fatalf("enrolled identity was not recovered: %v", err)
+	}
+	defer restarted.Close()
+	if _, err := os.Lstat(SetupSecretPath(config)); !os.IsNotExist(err) {
+		t.Fatalf("stale setup file survived recovery: %v", err)
+	}
+	if _, err := restarted.Login("local", testPassword); err != nil {
+		t.Fatalf("durable enrolled password did not verify: %v", err)
+	}
+	if err := restarted.Enroll(secret, testPassword); err == nil {
+		t.Fatal("consumed setup secret re-enrolled")
+	}
+}
+
 func TestAuthStateMissingAfterInitializationFailsClosed(t *testing.T) {
 	config := filepath.Join(t.TempDir(), "config.json")
 	if _, err := Open(config, true); err == nil {
