@@ -19,8 +19,9 @@ MAX_TEXT=1048576
 def private_error(name):
  p=pathlib.PurePosixPath(name)
  if not name or not p.parts or p.is_absolute() or '..' in p.parts or '\\' in name:return 'unsafe path'
- parts=[x.removeprefix('._').casefold() for x in p.parts]
- if any(x in PRIVATE_DIRS and not (x=='internal' and (p.suffix.casefold() in CODE_TYPES or parts[-1]=='openapi.json')) for x in parts):return 'local-only directory'
+ parts=[x.lstrip('._').casefold() for x in p.parts]
+ source_internal=p.parts[0]=='internal' and (p.suffix.casefold() in CODE_TYPES or p.name=='openapi.json')
+ if any(x in PRIVATE_DIRS and not (x=='internal' and source_internal) for x in parts):return 'local-only directory'
  if parts[-1] in PRIVATE_FILES or p.suffix.casefold()=='.log':return 'local-only report/log'
  if p.suffix.casefold() in DOC_TYPES|{'.zip','.gz','.xz','.tar','.tgz'} and REPORT.search(parts[-1]):return 'internal planning/report file'
  return None
