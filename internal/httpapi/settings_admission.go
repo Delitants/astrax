@@ -29,7 +29,7 @@ func (s *Server) validateManagementSettings(in model.Settings) error {
 		return errors.New("HTTPS redirect requires administrator enrollment")
 	}
 	httpsAddr := in.ControlListenHTTPS
-	if tlsConfig == nil && !in.RedirectHTTPS && httpsAddr == model.DefaultSettings().ControlListenHTTPS {
+	if !in.RedirectHTTPS && httpsAddr == model.DefaultSettings().ControlListenHTTPS {
 		httpsAddr = ""
 	}
 	admission, err := adminauth.AdmitManagement(in.ControlListen, httpsAddr, enrolled, tlsConfig, false)

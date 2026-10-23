@@ -72,6 +72,13 @@ func TestManagementSettingsSaveThenPreflight(t *testing.T) {
 				"control_listen_https": "0.0.0.0:8443", "redirect_https": false,
 			},
 		},
+		{
+			name:     "default HTTPS wildcard remains inert after certificate setup",
+			withCert: true,
+			patch: map[string]any{
+				"control_listen_https": "0.0.0.0:8443", "redirect_https": false,
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := preflightConfig(t, `{"control_listen":"127.0.0.1:18080"}`)
@@ -116,6 +123,7 @@ func TestManagementSettingsRejectBeforePersistence(t *testing.T) {
 		{name: "HTTPS without certificate", method: http.MethodPatch, patch: map[string]any{"control_listen_https": "192.0.2.10:18443"}},
 		{name: "HTTPS wildcard with certificate", cert: true, method: http.MethodPatch, patch: map[string]any{"control_listen_https": "0.0.0.0:18443"}},
 		{name: "HTTPS certificate identity mismatch", cert: true, method: http.MethodPatch, patch: map[string]any{"control_listen_https": "192.0.2.10:18443"}},
+		{name: "HTTP HTTPS listener collision", cert: true, method: http.MethodPatch, patch: map[string]any{"control_listen_https": "127.0.0.1:18080"}},
 		{name: "redirect without HTTPS listener", method: http.MethodPatch, patch: map[string]any{"redirect_https": true}},
 		{name: "redirect with default wildcard and no certificate", method: http.MethodPatch, patch: map[string]any{"control_listen_https": "0.0.0.0:8443", "redirect_https": true}},
 		{name: "PUT plaintext LAN", method: http.MethodPut, fullListen: "192.0.2.10:18080"},

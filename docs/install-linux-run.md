@@ -84,6 +84,13 @@ firewall or make the management UI available on the LAN. To enable HTTPS,
 configure a concrete listener IP and a certificate valid for the intended
 browser address before restarting; the wildcard HTTPS default is not an
 admitted certificate-backed listener.
+To replace or delete a certificate, first disable the HTTPS management
+listener and redirect and any external API TLS listener, restart AstraX, then
+change the certificate and re-enable HTTPS. The management API rejects
+certificate changes while either HTTPS listener is configured or running so
+the next restart cannot be stranded.
+The management certificate does not change MPEG-TS playback on the separate
+HTTP play port to HTTPS; playback TLS is not enabled by this installer.
 
 Systemd uses `/etc/systemd/system/astrax.service`. OpenRC and SysV templates
 remain in source for future qualification, but are not supported by the first

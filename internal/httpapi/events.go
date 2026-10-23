@@ -101,7 +101,8 @@ func (s *Server) handleSnapshotEvents(w http.ResponseWriter, r *http.Request, ex
 }
 
 func streamEventChannel[T any](w http.ResponseWriter, r *http.Request, ch <-chan T, active, fullValid func() bool, write func(T) (bool, error)) {
-	keepAlive := time.NewTicker(10 * time.Second)
+	// Bound external durable-state revocation even when no events arrive.
+	keepAlive := time.NewTicker(time.Second)
 	defer keepAlive.Stop()
 	streamEventChannelWithKeepAlive(w, r, ch, active, fullValid, write, keepAlive.C)
 }
@@ -117,6 +118,17 @@ func streamEventChannelWithKeepAlive[T any](w http.ResponseWriter, r *http.Reque
 		case event, ok := <-ch:
 			if !ok {
 				return
+			}
+			// A ready event must not starve a due durable-state check.
+			select {
+			case <-keepAlive:
+				if !fullValid() {
+					return
+				}
+				if err := sendEventKeepAlive(w); err != nil {
+					return
+				}
+			default:
 			}
 			if !active() {
 				return

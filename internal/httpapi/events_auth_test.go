@@ -5,12 +5,17 @@ package httpapi
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"astrax/internal/adminauth"
 )
 
 type firstFlushRecorder struct {
@@ -89,5 +94,67 @@ func TestManagementSSEChecksSessionBeforeKeepAlive(t *testing.T) {
 	waitForSSE(t, done)
 	if strings.Contains(w.Body.String(), "keepalive") {
 		t.Fatal("revoked stream emitted keepalive")
+	}
+}
+
+func TestManagementSSEStopsForExternalDurableRevocation(t *testing.T) {
+	config := filepath.Join(t.TempDir(), "config.json")
+	m, session := enrollTestAdmin(t, config)
+	if err := os.Chmod(adminauth.StatePath(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !m.SessionActive(session.Token) {
+		t.Fatal("external state change unexpectedly revoked the in-memory session")
+	}
+
+	w := httptest.NewRecorder()
+	events := make(chan string, 1)
+	events <- "denied"
+	ticks := make(chan time.Time, 1)
+	ticks <- time.Now()
+	streamEventChannelWithKeepAlive(w, httptest.NewRequest(http.MethodGet, "/api/v1/events", nil), events,
+		func() bool { return m.SessionActive(session.Token) },
+		func() bool { return m.SessionValid(session.Token) },
+		func(event string) (bool, error) {
+			_, err := fmt.Fprintf(w, "data: %s\n\n", event)
+			return false, err
+		}, ticks)
+	if strings.Contains(w.Body.String(), "denied") || strings.Contains(w.Body.String(), "keepalive") {
+		t.Fatalf("durably revoked stream emitted a frame: %s", w.Body.String())
+	}
+}
+
+func TestManagementSSEDueCheckCannotBeStarvedByEvents(t *testing.T) {
+	for i := 0; i < 32; i++ {
+		w := httptest.NewRecorder()
+		events := make(chan string, 1)
+		events <- "denied"
+		ticks := make(chan time.Time, 1)
+		ticks <- time.Now()
+		streamEventChannelWithKeepAlive(w, httptest.NewRequest(http.MethodGet, "/api/v1/events", nil), events,
+			func() bool { return true }, func() bool { return false },
+			func(event string) (bool, error) {
+				_, err := fmt.Fprintf(w, "data: %s\n\n", event)
+				return false, err
+			}, ticks)
+		if strings.Contains(w.Body.String(), "denied") {
+			t.Fatalf("attempt %d emitted an event while durable check was due: %s", i, w.Body.String())
+		}
+	}
+}
+
+func TestManagementSSEDoesNotCheckDurableStatePerEvent(t *testing.T) {
+	w := httptest.NewRecorder()
+	events := make(chan int, 64)
+	for i := 0; i < cap(events); i++ {
+		events <- i
+	}
+	close(events)
+	checks := 0
+	streamEventChannelWithKeepAlive(w, httptest.NewRequest(http.MethodGet, "/api/v1/events", nil), events,
+		func() bool { return true }, func() bool { checks++; return true },
+		func(int) (bool, error) { return false, nil }, make(chan time.Time))
+	if checks != 0 {
+		t.Fatalf("durable state checked %d times without a due interval", checks)
 	}
 }

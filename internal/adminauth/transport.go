@@ -118,6 +118,9 @@ func AdmitManagement(httpAddr, httpsAddr string, enrolled bool, tlsConfig *tls.C
 		return Admission{}, fmt.Errorf("HTTPS management certificate has no exact browser identity for this listener")
 	}
 	result.HTTPSAddr = net.JoinHostPort(httpsIP.String(), httpsPort)
+	if result.HTTPSAddr == result.HTTPAddr {
+		return Admission{}, fmt.Errorf("HTTP and HTTPS management listeners cannot use the same address")
+	}
 	result.RedirectHTTPSAddr = net.JoinHostPort(redirectHost, httpsPort)
 	result.HTTPSIdentities = identities
 	result.StartHTTPS = true

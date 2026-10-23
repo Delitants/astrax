@@ -308,6 +308,10 @@ astrax_activate() {
     }
     cmp -s "$service" "$template_dir/$init.in" || { echo 'service definition mismatch' >&2; return 1; }
     [ -d "$root/var/lib/astrax" ] || { echo 'state directory missing' >&2; return 1; }
+    [ "$(astrax_account_status "$root")" = compatible ] || {
+        echo 'compatible astrax account required for activation' >&2
+        return 1
+    }
     echo "Activating AstraX via $init: $service"
     newly_enabled=0
     if ! astrax_service_enabled "$root" "$init"; then

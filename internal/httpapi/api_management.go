@@ -114,6 +114,8 @@ func (s *Server) handleAPISettings(w http.ResponseWriter, r *http.Request) {
 		s.apiSettingsError(w, 400, "invalid_settings", err.Error())
 		return
 	}
+	s.managementConfigMu.Lock()
+	defer s.managementConfigMu.Unlock()
 	if err := s.store.ValidateExternalAPISettings(in); err != nil {
 		if errors.Is(err, store.ErrStoreClosed) {
 			s.apiSettingsError(w, 503, "runtime_unavailable", "The runtime is unavailable")

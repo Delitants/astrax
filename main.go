@@ -88,9 +88,6 @@ func main() {
 		prepared.Close()
 		log.Fatalf("failed to activate store runtime: %v", err)
 	}
-	if prepared.tlsConfig != nil {
-		st.SetStreamerTLSConfig(prepared.tlsConfig)
-	}
 
 	go func() {
 		log.Printf("AstraX management HTTP listener reserved at %s", prepared.httpAddr)
@@ -223,7 +220,7 @@ func prepareManagementWith(configPath, listenOverride, httpsOverride string, dep
 	if httpsOverride != "" {
 		httpsAddr = httpsOverride
 	}
-	if p.tlsConfig == nil && httpsOverride == "" && !settings.RedirectHTTPS && httpsAddr == modelDefaultHTTPSAddress {
+	if httpsOverride == "" && !settings.RedirectHTTPS && httpsAddr == modelDefaultHTTPSAddress {
 		httpsAddr = ""
 	}
 	enrolled, err := p.auth.EnrollmentState()

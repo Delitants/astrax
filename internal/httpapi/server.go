@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 
 	"astrax/internal/adminauth"
 	"astrax/internal/cert"
@@ -28,6 +29,7 @@ type Server struct {
 	certMgr             *cert.Manager
 	auth                *adminauth.Manager
 	managementTransport adminauth.Admission
+	managementConfigMu  sync.Mutex
 	mux                 *http.ServeMux
 	webAssets           fs.FS
 	externalAPI         *ExternalAPIManager
@@ -442,7 +444,9 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
 		}
+		s.managementConfigMu.Lock()
 		settings, err := s.store.SetSettingsWithValidation(in, s.validateManagementSettings)
+		s.managementConfigMu.Unlock()
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
@@ -454,7 +458,9 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
 		}
+		s.managementConfigMu.Lock()
 		settings, err := s.store.PatchSettingsWithValidation(fields, s.validateManagementSettings)
+		s.managementConfigMu.Unlock()
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 			return
@@ -549,6 +555,22 @@ func (s *Server) handleCertStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"exists": s.certMgr.Exists()})
 }
 
+// A certificate change cannot invalidate an HTTPS listener already admitted
+// for restart. Disable HTTPS and restart before rotating an active certificate.
+func (s *Server) certificateMutationAllowed() error {
+	settings := s.store.Settings()
+	externalTLS := settings.ExternalAPI.Enabled && settings.ExternalAPI.TLS
+	if s.externalAPI != nil {
+		status := s.externalAPI.Status()
+		externalTLS = externalTLS || status.Running && status.TLS
+	}
+	if settings.RedirectHTTPS || s.managementTransport.StartHTTPS ||
+		(settings.ControlListenHTTPS != "" && settings.ControlListenHTTPS != model.DefaultSettings().ControlListenHTTPS) || externalTLS {
+		return errors.New("disable management and external API HTTPS listeners and restart before changing their certificate")
+	}
+	return nil
+}
+
 func (s *Server) handleCertGenerate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -569,6 +591,12 @@ func (s *Server) handleCertGenerate(w http.ResponseWriter, r *http.Request) {
 		in.Hosts = []string{"localhost", "127.0.0.1"}
 	}
 
+	s.managementConfigMu.Lock()
+	defer s.managementConfigMu.Unlock()
+	if err := s.certificateMutationAllowed(); err != nil {
+		writeJSON(w, http.StatusConflict, apiError{Error: err.Error()})
+		return
+	}
 	if err := s.certMgr.GenerateSelfSigned(in.Hosts, in.DurationDays, in.CommonName); err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
@@ -596,6 +624,12 @@ func (s *Server) handleCertUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.managementConfigMu.Lock()
+	defer s.managementConfigMu.Unlock()
+	if err := s.certificateMutationAllowed(); err != nil {
+		writeJSON(w, http.StatusConflict, apiError{Error: err.Error()})
+		return
+	}
 	if err := s.certMgr.Save([]byte(in.Cert), []byte(in.Key)); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
@@ -606,6 +640,12 @@ func (s *Server) handleCertUpload(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCertDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
+		return
+	}
+	s.managementConfigMu.Lock()
+	defer s.managementConfigMu.Unlock()
+	if err := s.certificateMutationAllowed(); err != nil {
+		writeJSON(w, http.StatusConflict, apiError{Error: err.Error()})
 		return
 	}
 	if err := s.certMgr.Delete(); err != nil {

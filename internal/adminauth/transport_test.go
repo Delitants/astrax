@@ -154,6 +154,20 @@ func TestManagementTransportCanonicalIPv6HTTPSAddress(t *testing.T) {
 	}
 }
 
+func TestManagementTransportRejectsHTTPHTTPSListenerCollision(t *testing.T) {
+	manager := cert.New(t.TempDir())
+	if err := manager.GenerateSelfSigned([]string{"127.0.0.1"}, 30, "test"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := manager.TLSConfigWithVersion("1.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := AdmitManagement("127.0.0.1:8080", "127.0.0.1:8080", true, cfg, false); err == nil || got.StartHTTPS {
+		t.Fatalf("same HTTP/HTTPS listener admitted: %+v, %v", got, err)
+	}
+}
+
 func TestManagementTransportRejectsNonExactCertificateIdentity(t *testing.T) {
 	for _, sans := range [][]string{{"*.example"}, {"198.51.100.20"}, {"0.0.0.0"}} {
 		manager := cert.New(t.TempDir())

@@ -325,6 +325,21 @@ class InstallerCoreTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse((self.root / "qa/service-actions").exists())
 
+    def test_activation_rechecks_account_before_service_actions(self):
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        account = self.root / "qa/account"
+        account.unlink()
+        for status in ("absent", "incompatible"):
+            with self.subTest(status=status):
+                if status == "incompatible":
+                    (self.root / "qa/account-incompatible").touch()
+                result = self.run_core("astrax_activate")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("compatible astrax account", result.stderr)
+                self.assertFalse((self.root / "qa/service-actions").exists())
+                self.assertFalse((self.root / "qa/service-enabled").exists())
+
     def test_failed_start_undoes_new_enablement(self):
         self.configure_init("systemd")
         self.assertEqual(self.run_core("astrax_install").returncode, 0)
