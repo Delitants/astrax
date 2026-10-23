@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "repository": "Delitants/astrax",
+  "baseline": "a44a153254088af2f4063a3b3883e2d3123dae66",
+  "public_docs": [],
+  "public_data": [],
+  "release_assets": [
+    "AstraX-ubuntu-24.04-amd64-preview-*.run",
+    "SHA256SUMS.txt"
+  ]
+}
