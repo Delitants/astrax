@@ -45,10 +45,11 @@ GPL-3.0-or-later by their explicit file-level notices.
 
 ## Separate terms and unresolved release inputs
 
-- `v4l-utils-1.18.0/` and the four `v4l-utils_1.18.0*` source/packaging
-  archives retain their upstream, file-specific GPL, LGPL, BSD, IJG, artwork
-  and other terms. The GPL text in this repository is not a blanket relicense
-  of that tree.
+- The historical `v4l-utils-1.18.0/` tree and `v4l-utils_1.18.0*`
+  source/packaging archives are not in this public source snapshot or the
+  selected first-release payload. If distributed separately, they retain
+  their upstream, file-specific GPL, LGPL, BSD, IJG, artwork and other terms;
+  this project's GPL grant does not relicense them.
 - Every `internal/**/testdata/` tree and `tests/web/fixtures/` is excluded from
   the central grant. Some fixtures have independently retained provenance and
   license material, notably `internal/csa/testdata/`. Review each fixture's
@@ -62,7 +63,7 @@ GPL-3.0-or-later by their explicit file-level notices.
   unlisted files.
 
 The [Stage C distribution inventory](docs/licensing/stage-c-distribution.md)
-records exact known third-party exceptions and open source/notice questions.
+summarizes known third-party components and open source/notice questions.
 It is not yet a complete third-party notice package. **Binary distribution,
 Stage C enablement and production deployment remain held** pending review of
 the actual artifact, its corresponding source and all required notices. This
