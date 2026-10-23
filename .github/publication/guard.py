@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Keep local planning and reports out of source pushes and release uploads."""
-import argparse,fnmatch,json,pathlib,re,shutil,stat,subprocess,sys,tarfile,tempfile,zipfile
+import argparse,fnmatch,hashlib,json,pathlib,re,shutil,stat,subprocess,sys,tarfile,tempfile,zipfile
 CONTROL='.github/publication/'
 CONTROL_FILES={CONTROL+'guard.py',CONTROL+'install-hooks.py',CONTROL+'policy.json'}
 PRIVATE_DIRS={'work','outputs','internal','reports','test-reports','evidence','acceptance','plans',
@@ -112,10 +112,19 @@ def archive_errors(path):
  except (OSError,ValueError,UnicodeError,RuntimeError,zipfile.BadZipFile,tarfile.TarError) as e:errors.append(str(path)+': '+str(e))
  return errors
 
+def file_sha256(path):
+ digest=hashlib.sha256()
+ with path.open('rb') as stream:
+  for chunk in iter(lambda:stream.read(1024*1024),b''):digest.update(chunk)
+ return digest.hexdigest()
+
 def release_errors(policy,tag,assets,notes=None):
  if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+-]*',tag):return ['Unsafe release tag']
  version=tag[1:] if tag.startswith('v') else tag
  patterns=[p.replace('{version}',version) for p in policy.get('release_assets',[])]
+ pin_groups=policy.get('release_asset_sha256')
+ pins=pin_groups.get(tag) if isinstance(pin_groups,dict) else None
+ if not isinstance(pins,dict):pins={}
  errors=[];seen=set()
  for value in assets:
   p=pathlib.Path(value);name=p.name
@@ -125,6 +134,11 @@ def release_errors(policy,tag,assets,notes=None):
   if error:errors.append(name+': '+error);continue
   if not any(fnmatch.fnmatchcase(name,pattern) for pattern in patterns):errors.append(name+': not an approved release asset');continue
   if p.is_symlink() or not p.is_file():errors.append(name+': missing/unsafe asset');continue
+  expected=pins.get(name)
+  if not isinstance(expected,str) or not re.fullmatch(r'[0-9a-f]{64}',expected):
+   errors.append(name+': missing reviewed SHA-256 pin for release tag');continue
+  if file_sha256(p)!=expected:
+   errors.append(name+': reviewed SHA-256 mismatch');continue
   errors+=archive_errors(p)
   if name.casefold() in USER_DOCS:
    if p.stat().st_size>MAX_TEXT:errors.append(name+': help exceeds size limit')
@@ -148,6 +162,11 @@ def upload_snapshot(repo,policy,tag,assets,notes):
  errors=release_errors(policy,tag,paths,note)
  if errors:raise ValueError('; '.join(errors))
  return paths,note
+
+def existing_release_errors(assets):
+ if not isinstance(assets,list):return ['Cannot verify existing release attachments']
+ if assets:return ['Upload requires an empty release; existing attachments need separate review']
+ return []
 
 def main():
  p=argparse.ArgumentParser(description=__doc__)
@@ -186,10 +205,8 @@ def main():
    assets,notes=upload_snapshot(repo,policy,args.tag,args.asset,args.notes_file)
    release=json.loads(subprocess.check_output(['gh','api',f'repos/{policy["repository"]}/releases/tags/{args.tag}']))
    if text_errors('Release notes',release.get('body') or ''):raise ValueError('Existing release notes contain internal details')
-   version=args.tag[1:] if args.tag.startswith('v') else args.tag
-   patterns=[p.replace('{version}',version) for p in policy.get('release_assets',[])]
-   for asset in release['assets']:
-    if private_error(asset['name']) or not any(fnmatch.fnmatchcase(asset['name'],p) for p in patterns):raise ValueError('Existing release has an unapproved attachment; review it before upload')
+   existing_errors=existing_release_errors(release.get('assets'))
+   if existing_errors:raise ValueError('; '.join(existing_errors))
    subprocess.run(['gh','release','upload',args.tag,*[str(x) for x in assets],'--repo',policy['repository']],check=True)
   return 0
  except (OSError,ValueError,UnicodeError,KeyError,TypeError,subprocess.CalledProcessError) as error:
