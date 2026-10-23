@@ -49,9 +49,13 @@ The output directory must not exist and remains private to the invoking
 user. A rebuild need not match a prior ELF byte for byte; compare its source,
 build metadata, ABI, and behavior instead. The earlier `f9545f6` stage
 produced a held binary in an isolated Linux amd64 build and passed local hash
-and archive checks. The current `3e3b811` source stage has not been built for
-Linux. Do not relabel or modify a held layout in place to imply distribution
-readiness.
+and archive checks. The current `3e3b811` source stage produced one
+non-serving V11 Linux amd64 build. Root-owned QA evidence reported executable
+SHA-256 `81cf58aec5684567cdbbd312ac982337a639bfa9b5368a3704318b2c00e1b515`
+and private SRT SHA-256
+`3ee97016e9865d1116ba9c504a0d719747d6a85602c5f956bc02d632daae3bba`.
+Those binaries have not been retrieved or qualified for installation. Do not
+relabel or modify a held layout in place to imply distribution readiness.
 
 ## Management-auth source candidate
 
@@ -73,10 +77,10 @@ one private-loopback setup/auth/restart smoke passed. Exact-v3 synthetic
 browser composition also passed one Playwright attempt. A later source review
 identified management SSE revocation and save-then-restart admission defects,
 so this held ELF is not the final production candidate. The corrected source
-has passed an offline Mac compile-only check and a focused management Go
-regression, but has not been built for Linux.
-Source/notice closure, full-suite and installed-service QA, live admission,
-and a rebuild after those fixes remain separate gates.
+has passed offline Mac Go checks and produced the non-serving V11 Linux build
+described above. That build did not execute the candidate. Source/notice
+closure, candidate runtime and installed-service QA, and live admission remain
+separate gates.
 
 ## Held first-production candidate (not an installer identity)
 
