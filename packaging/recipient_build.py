@@ -19,18 +19,20 @@ import tarfile
 import zipfile
 
 
-SOURCE_COMMIT = "6544bd0d2f5abab0654b35078d7279d5e026cd9d"
-MANIFEST_SHA256 = "85ae036efdfe9fe267d6eab8fff5dbb8fb96cb684b4cce34402c05ed6003a838"
+SOURCE_COMMIT = "f9545f6f3d00028f461755ad26f934af20f0583e"
+MANIFEST_SHA256 = "0b6fb02bb2ab231f814c700e988fd79cb65758fd5083b2cc41f6c6c38e87e8da"
 PINS = {
-    "source/astrax-6544bd0-source.tar.gz": "515781316a1626840e8a4ae08dbea3d2993442f3ccfbe23ee3a2214a629f3038",
+    "source/astrax-f9545f6f3d00-source.tar.gz": "7d6548dd2c5e9488a86b1c9d9f3ec1a0c6c429143ba72ff846109c01b2558618",
     "source/srt_1.4.0.orig.tar.gz": "c2ba0bb9382ab42f9eebac831dc021e7da26b2971aaeb30a891dd24297bd929c",
     "source/srt_1.4.0-1build1.debian.tar.xz": "849199cd57d93ca8fecc2b0ef26f89d4b9e341ce74262ed09acaf72c9471957e",
     "source/srt_1.4.0-1build1.dsc": "873634cd5ef1cd25e68bf54e14b7b548cf48050b5796f6d9eed24d9ed08530e2",
     "source/libdvbcsa-1.1.0.tar.gz": "4db78af5cdb2641dfb1136fe3531960a477c9e3e3b6ba19a2754d046af3f456d",
-    "source/golang.org_x_text_v0.37.0.zip": "b8d475c17835ab602b91f1147684ceb5dbf4060e72e5dfb2e0e33efc9312a982",
+    "source/golang.org_x_crypto_v0.55.0.zip": "0660bba47b3643fe1beb1b97af93b6a4d2bf2ed069d9e52a2b1bdf6f17cf3e79",
+    "source/golang.org_x_sys_v0.47.0.zip": "cdac013ddced0262926ec29ffcda645da39670e61c7e5b761e572b6b1809bb1b",
+    "source/golang.org_x_text_v0.41.0.zip": "e63f35daaae749d0ffff97a295ad8f4837a662938a46b7a87f18a88e85a5cbf9",
     "patches/guard.patch": "7cd257cbba314c52ba471b07519c10a2d49353e5a1a80cee5f99971a7a2a73cc",
 }
-SOURCE_ARCHIVE = "source/astrax-6544bd0-source.tar.gz"
+SOURCE_ARCHIVE = "source/astrax-f9545f6f3d00-source.tar.gz"
 CONGCTL_ORIGINAL_SHA256 = "bebbabadb6c1b8c96dc02d96d6185159afedd2d3bff1208382c51375f1ed5033"
 CONGCTL_GUARDED_SHA256 = "c40fd0f7e0e1fd39486b77fd561f0d470e3e875b14af2acf9e53683a3ec09481"
 AUTH_MODULE_PINS = {
@@ -95,11 +97,8 @@ def module_profile(go_mod):
     text = Path(go_mod).read_text()
     modern = all(_requires_module(text, module, spec["version"])
                  for module, spec in AUTH_MODULE_PINS.items())
-    legacy = _requires_module(text, "golang.org/x/text", "v0.37.0")
-    if modern and not legacy:
+    if modern and not _requires_module(text, "golang.org/x/text", "v0.37.0"):
         return "auth"
-    if legacy and not any(name in text for name in ("golang.org/x/crypto", "golang.org/x/sys")):
-        return "legacy"
     raise SourceBuildError("source go.mod has an unpinned module set")
 
 
@@ -195,6 +194,9 @@ def verify_stage(stage, *, manifest_sha=MANIFEST_SHA256, pins=PINS):
     files = manifest.get("included_file_sha256")
     count = manifest.get("project_source_file_count")
     if (manifest.get("source_commit") != SOURCE_COMMIT
+            or manifest.get("source_archive") != SOURCE_ARCHIVE
+            or SOURCE_ARCHIVE not in pins
+            or manifest.get("source_archive_sha256") != pins[SOURCE_ARCHIVE]
             or manifest.get("candidate_qualified") is not False
             or manifest.get("distribution_cleared") is not False
             or not isinstance(files, dict) or not isinstance(count, int) or count < 1
@@ -349,20 +351,9 @@ def build(stage, output, *, recipient=False, manifest_sha=MANIFEST_SHA256, pins=
     if (source / ".git").exists() or not (source / "web/index.html").is_file():
         raise SourceBuildError("project archive extraction invalid")
 
-    profile = module_profile(source / "go.mod")
-    if profile == "auth":
-        stage_auth_module_proxy(stage / "source", output / "proxy", source / "go.mod", source / "go.sum")
-        required_build_modules = [f"{module}\t{spec['version']}" for module, spec in AUTH_MODULE_PINS.items()]
-    else:
-        proxy = output / "proxy/golang.org/x/text/@v"
-        proxy.mkdir(parents=True)
-        module_zip = stage / "source/golang.org_x_text_v0.37.0.zip"
-        with zipfile.ZipFile(module_zip) as archive:
-            mod = archive.read("golang.org/x/text@v0.37.0/go.mod")
-        (proxy / "v0.37.0.mod").write_bytes(mod)
-        (proxy / "v0.37.0.info").write_text('{"Version":"v0.37.0","Time":"2026-01-01T00:00:00Z"}\n')
-        shutil.copyfile(module_zip, proxy / "v0.37.0.zip")
-        required_build_modules = ["golang.org/x/text\tv0.37.0"]
+    module_profile(source / "go.mod")
+    stage_auth_module_proxy(stage / "source", output / "proxy", source / "go.mod", source / "go.sum")
+    required_build_modules = [f"{module}\t{spec['version']}" for module, spec in AUTH_MODULE_PINS.items()]
 
     srt = output / "srt-source"
     _run(["dpkg-source", "-x", str(stage / "source/srt_1.4.0-1build1.dsc"),

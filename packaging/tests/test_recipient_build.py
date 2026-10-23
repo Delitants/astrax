@@ -14,12 +14,27 @@ from packaging import recipient_build
 
 
 class RecipientBuildModeTests(TestCase):
+    def test_current_source_stage_is_the_only_default_recipe_identity(self):
+        self.assertEqual(recipient_build.SOURCE_COMMIT,
+                         "f9545f6f3d00028f461755ad26f934af20f0583e")
+        self.assertEqual(recipient_build.MANIFEST_SHA256,
+                         "0b6fb02bb2ab231f814c700e988fd79cb65758fd5083b2cc41f6c6c38e87e8da")
+        self.assertEqual(recipient_build.SOURCE_ARCHIVE,
+                         "source/astrax-f9545f6f3d00-source.tar.gz")
+        self.assertEqual(recipient_build.PINS[recipient_build.SOURCE_ARCHIVE],
+                         "7d6548dd2c5e9488a86b1c9d9f3ec1a0c6c429143ba72ff846109c01b2558618")
+        for module, spec in recipient_build.AUTH_MODULE_PINS.items():
+            archive = f"source/{module.replace('/', '_')}_{spec['version']}.zip"
+            self.assertEqual(recipient_build.PINS[archive], spec["sha256"]["zip"])
+        self.assertNotIn("source/golang.org_x_text_v0.37.0.zip", recipient_build.PINS)
+
     def test_module_profile_rejects_incomplete_auth_dependency_set(self):
         self.assertTrue(hasattr(recipient_build, "module_profile"))
         with tempfile.TemporaryDirectory() as directory:
             go_mod = Path(directory) / "go.mod"
             go_mod.write_text("module astrax\nrequire golang.org/x/text v0.37.0\n")
-            self.assertEqual(recipient_build.module_profile(go_mod), "legacy")
+            with self.assertRaisesRegex(recipient_build.SourceBuildError, "module"):
+                recipient_build.module_profile(go_mod)
             go_mod.write_text("module astrax\nrequire golang.org/x/crypto v0.55.0\n")
             with self.assertRaisesRegex(recipient_build.SourceBuildError, "module"):
                 recipient_build.module_profile(go_mod)
@@ -28,6 +43,9 @@ class RecipientBuildModeTests(TestCase):
                               " golang.org/x/sys v0.47.0 // indirect\n"
                               " golang.org/x/text v0.41.0\n)\n")
             self.assertEqual(recipient_build.module_profile(go_mod), "auth")
+            go_mod.write_text(go_mod.read_text() + "require golang.org/x/text v0.37.0\n")
+            with self.assertRaisesRegex(recipient_build.SourceBuildError, "module"):
+                recipient_build.module_profile(go_mod)
 
     def test_auth_module_proxy_stages_only_matching_local_source(self):
         self.assertTrue(hasattr(recipient_build, "stage_auth_module_proxy"))

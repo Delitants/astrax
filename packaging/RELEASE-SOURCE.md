@@ -23,9 +23,11 @@ the AstraX, Go, SRT, libdvbcsa, x/text, patch, and notice sources recorded
 in its payload. The public source snapshot alone is not the corresponding
 source package for the frozen Linux executable.
 
-The frozen executable was built from AstraX source commit `6544bd0`.
-`recipient_build.py` accepts its hash-pinned source stage and offers two
-non-serving build modes: `--output` retains the private QA preflight, while
+The published preview executable was built from AstraX source commit `6544bd0`.
+It does not contain the new management authentication. The current
+`recipient_build.py` is instead pinned to the held source-only stage for
+commit `f9545f6f3d00` (194 application files, three offline Go modules).
+It offers two non-serving build modes: `--output` retains the private QA preflight, while
 `--recipient-output` can run as an ordinary non-root user on Linux amd64.
 It uses staged source archives and a local Go module proxy; it never runs
 the candidate executable. A separate Go 1.26.9 toolchain and Ubuntu 24.04
@@ -41,24 +43,25 @@ python3 -B share/build/recipient_build.py share/source \
 ```
 
 The output directory must not exist and remains private to the invoking
-user. A rebuild need not match the frozen ELF byte for byte; compare its
-source, build metadata, ABI, and behavior instead. The recipient mode passed
-one isolated, non-serving native Linux amd64 build; its output hashes differ
-from the frozen candidate. Do not relabel or modify a held layout in place to
-imply distribution readiness.
+user. A rebuild need not match a prior ELF byte for byte; compare its source,
+build metadata, ABI, and behavior instead. The earlier recipient-mode Linux
+build covered the `6544bd0` stage only. The new `f9545f6` stage has passed
+local hash and archive checks, not a Linux build. Do not relabel or modify a
+held layout in place to imply distribution readiness.
 
-## Pending management-auth source candidate
+## Management-auth source candidate
 
-The locally staged management-auth source is **not** the frozen executable
+The locally frozen management-auth source is **not** the preview executable
 above. Its new module dependencies are `golang.org/x/crypto v0.55.0`,
 `golang.org/x/sys v0.47.0`, and `golang.org/x/text v0.41.0`. The offline recipe
 can verify their exact local ZIP, `.mod`, and `.info` inputs against pinned
 SHA-256 values, the source `go.mod` and `go.sum`, and each ZIP's `LICENSE` and
 `PATENTS` notices, then
 populate a file-only Go module proxy. It rejects an incomplete auth module set.
-This support does not update the frozen `6544bd0` source archive, source-stage
-manifest, release identity, or binary. A new source commit/archive and notice
-inventory must be pinned before a current-source build or `.run` can be claimed.
+The new source archive and held stage manifest are pinned to commit `f9545f6`.
+They do not change the published preview binary or its release identity.
+The first-production binary, installer payload, full source/notice closure,
+native QA, and live admission remain separate gates.
 
 The new management listener defaults to `http://127.0.0.1:8080`, accessible on
 the host only. From a workstation, use a private tunnel such as
