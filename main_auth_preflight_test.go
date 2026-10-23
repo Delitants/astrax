@@ -198,7 +198,7 @@ func TestManagementTransportRejectsWildcardRedirect(t *testing.T) {
 	}
 }
 
-func TestManagementTransportRejectsWildcardHTTPSWithoutRedirect(t *testing.T) {
+func TestManagementTransportKeepsDefaultHTTPSWildcardDormantWithoutRedirect(t *testing.T) {
 	path := preflightConfig(t, `{"control_listen":"127.0.0.1:18080","control_listen_https":"0.0.0.0:8443"}`)
 	enrollPreflight(t, path)
 	if err := cert.New(filepath.Dir(path)).GenerateSelfSigned([]string{"127.0.0.1"}, 30, "test"); err != nil {
@@ -212,8 +212,27 @@ func TestManagementTransportRejectsWildcardHTTPSWithoutRedirect(t *testing.T) {
 	if prepared != nil {
 		defer prepared.Close()
 	}
-	if err == nil || prepared != nil || binds.Load() != 0 {
-		t.Fatalf("wildcard HTTPS accepted before redirect check: prepared=%v err=%v binds=%d", prepared, err, binds.Load())
+	if err != nil || prepared == nil || prepared.httpsAddr != "" || prepared.admission.StartHTTPS || binds.Load() != 1 {
+		t.Fatalf("default wildcard HTTPS became active: prepared=%v err=%v binds=%d", prepared, err, binds.Load())
+	}
+}
+
+func TestManagementTransportRejectsNonDefaultWildcardHTTPSWithoutRedirect(t *testing.T) {
+	path := preflightConfig(t, `{"control_listen":"127.0.0.1:18080","control_listen_https":"0.0.0.0:18443"}`)
+	enrollPreflight(t, path)
+	if err := cert.New(filepath.Dir(path)).GenerateSelfSigned([]string{"management.example"}, 30, "test"); err != nil {
+		t.Fatal(err)
+	}
+	var binds atomic.Int32
+	prepared, err := prepareManagementWith(path, "", "", managementDeps{listen: func(_, addr string) (net.Listener, error) {
+		binds.Add(1)
+		return &preflightListener{address: addr}, nil
+	}})
+	if prepared != nil {
+		defer prepared.Close()
+	}
+	if err == nil || !strings.Contains(err.Error(), "concrete IP address") || prepared != nil || binds.Load() != 0 {
+		t.Fatalf("non-default wildcard HTTPS accepted or bound: prepared=%v err=%v binds=%d", prepared, err, binds.Load())
 	}
 }
 
