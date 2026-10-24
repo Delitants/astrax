@@ -78,6 +78,20 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertTrue(guard.existing_release_errors([{"name": RUN_NAME}]))
         self.assertTrue(guard.existing_release_errors([{"name": "unexpected.log"}]))
 
+    def test_draft_release_lookup_uses_cli_tag_view(self):
+        response = {"tagName": "v0.1.0", "assets": [], "body": "Public release notes"}
+        with patch.object(guard.subprocess, "check_output", return_value=json.dumps(response).encode()) as call:
+            self.assertEqual(response, guard.release_by_tag("Delitants/astrax", "v0.1.0"))
+        call.assert_called_once_with(
+            ["gh", "release", "view", "v0.1.0", "--repo", "Delitants/astrax", "--json", "tagName,assets,body"]
+        )
+
+    def test_draft_release_lookup_rejects_wrong_tag(self):
+        response = {"tagName": "v0.1.0-preview.1", "assets": []}
+        with patch.object(guard.subprocess, "check_output", return_value=json.dumps(response).encode()):
+            with self.assertRaisesRegex(ValueError, "Release tag mismatch"):
+                guard.release_by_tag("Delitants/astrax", "v0.1.0")
+
     def test_history_blocks_code_inside_private_document_directory(self):
         for name in (
             "docs/internal/notes.py", "internal/.internal/notes.py",

@@ -170,6 +170,11 @@ def existing_release_errors(assets):
  if assets:return ['Upload requires an empty release; existing attachments need separate review']
  return []
 
+def release_by_tag(repo,tag):
+ release=json.loads(subprocess.check_output(['gh','release','view',tag,'--repo',repo,'--json','tagName,assets,body']))
+ if release.get('tagName')!=tag:raise ValueError('Release tag mismatch')
+ return release
+
 def main():
  p=argparse.ArgumentParser(description=__doc__)
  p.add_argument('--repository',type=pathlib.Path,default=pathlib.Path.cwd());p.add_argument('--policy',type=pathlib.Path)
@@ -205,7 +210,7 @@ def main():
    identity=re.search(r'github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$',origin,re.I)
    if not identity or identity[1].casefold()!=policy['repository'].casefold():raise ValueError('Upload repository identity differs')
    assets,notes=upload_snapshot(repo,policy,args.tag,args.asset,args.notes_file)
-   release=json.loads(subprocess.check_output(['gh','api',f'repos/{policy["repository"]}/releases/tags/{args.tag}']))
+   release=release_by_tag(policy['repository'],args.tag)
    if text_errors('Release notes',release.get('body') or ''):raise ValueError('Existing release notes contain internal details')
    existing_errors=existing_release_errors(release.get('assets'))
    if existing_errors:raise ValueError('; '.join(existing_errors))
