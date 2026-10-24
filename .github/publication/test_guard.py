@@ -65,7 +65,12 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertTrue(guard.existing_release_errors([{"name": "unexpected.log"}]))
 
     def test_history_blocks_code_inside_private_document_directory(self):
-        for name in ("docs/internal/notes.py", "internal/.internal/notes.py", "internal/._internal/notes.py"):
+        for name in (
+            "docs/internal/notes.py", "internal/.internal/notes.py",
+            "internal/._internal/notes.py", ".codex/notes.py",
+            "._codex/notes.py", ".agents/notes.py",
+            ".agent-artifacts/notes.py",
+        ):
             with patch.object(guard, "git", return_value=(name + "\0").encode()), patch.object(
                 guard, "exists_at", return_value=True
             ):
@@ -82,6 +87,18 @@ class ReleaseAssetTests(unittest.TestCase):
             "internal/._internal/notes.py",
         ):
             self.assertEqual("local-only directory", guard.private_error(name))
+
+    def test_all_private_directory_spellings_are_blocked(self):
+        for directory in guard.PRIVATE_DIRS - {"internal"}:
+            bare = directory.lstrip("._")
+            for spelling in (directory, "." + bare, "._" + bare):
+                with self.subTest(spelling=spelling):
+                    self.assertEqual(
+                        "local-only directory", guard.private_error(spelling + "/notes.py")
+                    )
+                    self.assertEqual(
+                        "local-only directory", guard.private_error("internal/" + spelling + "/notes.py")
+                    )
 
 
 if __name__ == "__main__":

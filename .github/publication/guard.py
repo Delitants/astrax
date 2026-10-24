@@ -5,6 +5,7 @@ CONTROL='.github/publication/'
 CONTROL_FILES={CONTROL+'guard.py',CONTROL+'install-hooks.py',CONTROL+'policy.json'}
 PRIVATE_DIRS={'work','outputs','internal','reports','test-reports','evidence','acceptance','plans',
               'superpowers','.superpowers','.codex','.agents','.agent-artifacts','privatefixtures'}
+NORMAL_PRIVATE_DIRS={x.lstrip('._').casefold() for x in PRIVATE_DIRS}
 PRIVATE_FILES={'release-info.json','release-evidence.json','host-matrix.json','development-evidence.json',
                'qualification-results.json','format-matrix.json','reference-actions.csv','reference-tools.csv',
                'results.json','test-results.xml','test-results.json','test-report.json','agents.md','claude.md','gemini.md'}
@@ -21,7 +22,7 @@ def private_error(name):
  if not name or not p.parts or p.is_absolute() or '..' in p.parts or '\\' in name:return 'unsafe path'
  parts=[x.lstrip('._').casefold() for x in p.parts]
  source_internal=p.parts[0]=='internal' and (p.suffix.casefold() in CODE_TYPES or p.name=='openapi.json')
- if any(x in PRIVATE_DIRS and not (x=='internal' and source_internal and p.parts[i]=='internal') for i,x in enumerate(parts)):return 'local-only directory'
+ if any(x in NORMAL_PRIVATE_DIRS and not (x=='internal' and source_internal and p.parts[i]=='internal') for i,x in enumerate(parts)):return 'local-only directory'
  if parts[-1] in PRIVATE_FILES or p.suffix.casefold()=='.log':return 'local-only report/log'
  if p.suffix.casefold() in DOC_TYPES|{'.zip','.gz','.xz','.tar','.tgz'} and REPORT.search(parts[-1]):return 'internal planning/report file'
  return None
