@@ -55,6 +55,10 @@ astrax_ldconfig_path() {
     printf '%s\n' "$1" | awk -v lib="$2" '$1 == lib && $2 == "(libc6,x86-64)" && $3 == "=>" { print $4; exit }'
 }
 
+astrax_has_glibcxx_3_4_32() {
+    LC_ALL=C tr '\000' '\n' < "$1" | grep -Fqx 'GLIBCXX_3.4.32'
+}
+
 astrax_check_abi() {
     root=$1
     if [ "$root" != / ]; then
@@ -63,7 +67,7 @@ astrax_check_abi() {
     fi
     [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ] || { echo 'Linux x86-64 required' >&2; return 1; }
     [ -e /lib64/ld-linux-x86-64.so.2 ] || { echo 'glibc ELF loader missing' >&2; return 1; }
-    for tool in getconf ldconfig strings; do
+    for tool in getconf ldconfig tr; do
         command -v "$tool" >/dev/null 2>&1 || { echo "required compatibility tool missing: $tool" >&2; return 1; }
     done
     version=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}')
@@ -80,7 +84,7 @@ astrax_check_abi() {
         [ -n "$path" ] && [ -f "$path" ] || { echo "missing x86-64 $lib" >&2; return 1; }
         if [ "$lib" = libstdc++.so.6 ]; then cxx=$path; fi
     done
-    strings "$cxx" | grep -qx GLIBCXX_3.4.32 || {
+    astrax_has_glibcxx_3_4_32 "$cxx" || {
         echo 'libstdc++ with GLIBCXX_3.4.32 required' >&2
         return 1
     }

@@ -481,3 +481,20 @@ class InstallerCoreTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "/lib/x86_64/libstdc++.so.6")
+
+    def test_abi_symbol_check_needs_no_binutils_and_matches_exact_version(self):
+        core = self.repo / "packaging/installer_core.sh"
+        library = self.base / "libstdc++.so.6"
+        for content, expected in (
+            (b"\x7fELF\x00GLIBCXX_3.4.32\x00other\x00", True),
+            (b"\x7fELF\x00GLIBCXX_3.4.320\x00other\x00", False),
+        ):
+            with self.subTest(content=content):
+                library.write_bytes(content)
+                result = subprocess.run(
+                    ["sh", "-c", f'. "{core}"; astrax_has_glibcxx_3_4_32 "$1"',
+                     "sh", str(library)],
+                    env={**os.environ, "ASTRAX_CORE_LIBRARY_ONLY": "1"},
+                    capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode == 0, expected, result.stderr)
