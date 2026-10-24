@@ -8,9 +8,14 @@
   "public_data": [],
   "release_assets": [
     "AstraX-ubuntu-24.04-amd64-preview-*.run",
+    "AstraX-ubuntu-24.04-amd64-v0.1.0.run",
     "SHA256SUMS.txt"
   ],
   "release_asset_sha256": {
+    "v0.1.0": {
+      "AstraX-ubuntu-24.04-amd64-v0.1.0.run": "2b91f6661d4812c970ee68fa4346d8bea83d7b29f5fce7345de2872c9ba21d53",
+      "SHA256SUMS.txt": "30dfd811c9d0921906df645d8ee98294417fc1fef822e5e5a9c3adae49017f81"
+    },
     "v0.1.0-preview.1": {
       "AstraX-ubuntu-24.04-amd64-preview-20261017.run": "883cbdf12127516217bde7ce29f1e2e043017f93d2390209bf46d4383ab2182c",
       "SHA256SUMS.txt": "282aee2e44009af56cfd228baab47a0391e4bfeb98d3b9a5be7fa69cc9b989cf"

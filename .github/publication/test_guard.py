@@ -1,6 +1,7 @@
 """Regression tests for release-asset publication admission."""
 
 import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,10 @@ import guard
 TAG = "v0.1.0-preview.1"
 RUN_NAME = "AstraX-ubuntu-24.04-amd64-preview-20261017.run"
 SUMS_NAME = "SHA256SUMS.txt"
+PRODUCTION_TAG = "v0.1.0"
+PRODUCTION_RUN_NAME = "AstraX-ubuntu-24.04-amd64-v0.1.0.run"
+PRODUCTION_RUN_SHA = "2b91f6661d4812c970ee68fa4346d8bea83d7b29f5fce7345de2872c9ba21d53"
+PRODUCTION_SUMS_SHA = "30dfd811c9d0921906df645d8ee98294417fc1fef822e5e5a9c3adae49017f81"
 
 
 class ReleaseAssetTests(unittest.TestCase):
@@ -37,6 +42,15 @@ class ReleaseAssetTests(unittest.TestCase):
 
     def test_pinned_release_assets_pass(self):
         self.assertEqual([], guard.release_errors(self.policy, TAG, [self.run, self.sums]))
+
+    def test_production_policy_uses_exact_filename_and_hashes(self):
+        policy = json.loads((Path(__file__).parent / "policy.json").read_text())
+        self.assertIn(PRODUCTION_RUN_NAME, policy["release_assets"])
+        self.assertEqual(
+            {PRODUCTION_RUN_NAME: PRODUCTION_RUN_SHA, SUMS_NAME: PRODUCTION_SUMS_SHA},
+            policy["release_asset_sha256"][PRODUCTION_TAG],
+        )
+        self.assertEqual(2, len(policy["release_asset_sha256"][PRODUCTION_TAG]))
 
     def test_modified_installer_is_rejected(self):
         self.run.write_bytes(b"private report behind an approved filename")
