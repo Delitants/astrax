@@ -66,6 +66,36 @@ class InstallerHeaderTests(unittest.TestCase):
         self.assertEqual((destination / "lib/libastrax_srt.so.1").readlink().as_posix(), "libastrax_srt.so.1.4.0")
         self.assertFalse((self.base / "astrax-ran").exists())
 
+    def test_installer_embedded_sources_materialize_byte_for_byte(self):
+        header = self.installer.read_bytes().split(MARKER, 1)[0].decode()
+        declarations = header.split("\npayload_offset() {", 1)[0]
+        names = (
+            "ASTRAX_CORE",
+            "ASTRAX_SYSTEMD_TEMPLATE",
+            "ASTRAX_OPENRC_TEMPLATE",
+            "ASTRAX_SYSV_TEMPLATE",
+        )
+        emissions = [
+            line for line in header.splitlines()
+            if line.strip().startswith("printf ")
+            and any(f'"${name}" > "$work/' in line for name in names)
+        ]
+        self.assertEqual(len(emissions), len(names))
+        stage = self.base / "embedded-sources"
+        script = declarations + '\nwork=$1\nmkdir -p "$work/init"\n' + "\n".join(emissions) + "\n"
+        result = subprocess.run(
+            ["sh", "-s", "--", str(stage)], input=script, text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for emitted, shipped in (
+            ("init/systemd.in", "share/build/init/systemd.in"),
+            ("init/openrc.in", "share/build/init/openrc.in"),
+            ("init/sysv.in", "share/build/init/sysv.in"),
+            ("installer_core.sh", "share/build/installer_core.sh"),
+        ):
+            with self.subTest(path=emitted):
+                self.assertEqual((stage / emitted).read_bytes(), (self.release / shipped).read_bytes())
+
     def test_held_qa_package_can_only_verify_and_extract(self):
         held = make_release(self.base / "held", cleared=False)
         qa_run = self.base / "astrax-QA-ONLY.run"
