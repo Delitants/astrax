@@ -8,14 +8,13 @@ The source passed isolated QA at the identified development commit; that does no
 
 ## Linux installer scope
 
-The planned first production `.run` targets Ubuntu 24.04 amd64 with systemd
-only. The existing public preview is not that release. Publication of a new
-binary, installation and production activation require separate approvals.
-When a production release is available, verify its asset and SHA-256 on the
-GitHub Releases page; this repository alone is not the corresponding-source
-package for a separately built executable. The installer payload must include
-its exact corresponding source and notices.
-OpenRC and SysV templates remain in the source, but their boot and service
-lifecycles are not qualified as supported release targets. The exact systemd
-unit passed static verification; manager-driven lifecycle acceptance remains
-pending. See [installer source and release scope](packaging/RELEASE-SOURCE.md).
+The `v0.1.0` `.run` targets Ubuntu 24.04 amd64 with systemd only. Get the
+installer and `SHA256SUMS.txt` from [GitHub Releases](https://github.com/Delitants/astrax/releases),
+verify the checksum, then run the installer with `--verify` before `--install`.
+Installation does not start the service; `--activate` is separate. The `.run`
+includes its corresponding source and notices. This repository alone is not
+the corresponding-source package for the binary.
+
+OpenRC, SysV, other distributions, and other architectures are not supported
+by this release. Installed systemd start/boot and live DVB/softcam behavior
+remain unverified; see the release notes before relying on it in production.
