@@ -18,14 +18,16 @@ type Detector interface {
 	DetectDVB(context.Context) ([]model.DVBCard, error)
 }
 
-type SystemDetector struct{}
+type SystemDetector struct {
+	OwnerHelper string
+}
 
 func (SystemDetector) DetectRuntime() []model.Adapter {
 	return DetectRuntime()
 }
 
-func (SystemDetector) DetectDVB(ctx context.Context) ([]model.DVBCard, error) {
-	return DetectDVB(ctx)
+func (d SystemDetector) DetectDVB(ctx context.Context) ([]model.DVBCard, error) {
+	return linuxDVBCardsWithHelper(ctx, d.OwnerHelper)
 }
 
 func (SystemDetector) Detect() []model.Adapter {

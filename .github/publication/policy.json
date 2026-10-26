@@ -1,15 +1,9 @@
 {
-  "schema": 1,
-  "repository": "Delitants/astrax",
   "baseline": "a44a153254088af2f4063a3b3883e2d3123dae66",
-  "public_docs": [
-    "docs/licensing/stage-c-distribution.md"
-  ],
   "public_data": [],
-  "release_assets": [
-    "AstraX-ubuntu-24.04-amd64-preview-*.run",
-    "AstraX-ubuntu-24.04-amd64-v0.1.0.run",
-    "SHA256SUMS.txt"
+  "public_docs": [
+    "docs/licensing/stage-c-distribution.md",
+    "docs/accounts.md"
   ],
   "release_asset_sha256": {
     "v0.1.0": {
@@ -19,6 +13,20 @@
     "v0.1.0-preview.1": {
       "AstraX-ubuntu-24.04-amd64-preview-20261017.run": "883cbdf12127516217bde7ce29f1e2e043017f93d2390209bf46d4383ab2182c",
       "SHA256SUMS.txt": "282aee2e44009af56cfd228baab47a0391e4bfeb98d3b9a5be7fa69cc9b989cf"
+    },
+    "v0.1.1-rc1": {
+      "AstraX-ubuntu-24.04-amd64-v0.1.1-rc1.run": "b36715d741c7d7aaa104260dade7510bd82fbc0ed412f741a7e6f07374762db8",
+      "AstraX-v0.1.1-rc1-source-notices.tar.gz": "cf0b319a43ad5c7a683d03718799222ec2a5d40d6bdae0665d7930fa23ae72f5",
+      "SHA256SUMS.txt": "2577e2a36f8eda6ef03136da3ab22ef20d4fc0d3e17b3f0bf4c7a91d50642e15"
     }
-  }
+  },
+  "release_assets": [
+    "AstraX-ubuntu-24.04-amd64-preview-*.run",
+    "AstraX-ubuntu-24.04-amd64-v0.1.0.run",
+    "SHA256SUMS.txt",
+    "AstraX-ubuntu-24.04-amd64-v0.1.1-rc1.run",
+    "AstraX-v0.1.1-rc1-source-notices.tar.gz"
+  ],
+  "repository": "Delitants/astrax",
+  "schema": 1
 }

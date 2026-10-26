@@ -116,19 +116,88 @@ astrax_check_release_target() {
     esac
 }
 
+astrax_check_parent_paths() {
+    for astrax_parent in "$1/opt" "$1/var" "$1/var/lib" "$1/etc" "$1/etc/sudoers.d" \
+        "$1/etc/systemd" "$1/etc/systemd/system" "$1/etc/init.d"; do
+        [ ! -L "$astrax_parent" ] || { echo "symlink parent: $astrax_parent" >&2; return 1; }
+        if [ -e "$astrax_parent" ]; then
+            [ -d "$astrax_parent" ] || return 1
+            if [ "$1" = / ]; then
+                [ -n "$(find "$astrax_parent" -prune -uid 0 -gid 0 ! -perm -020 ! -perm -002 -print)" ] || {
+                    echo "unsafe parent ownership/mode: $astrax_parent" >&2; return 1
+                }
+            fi
+        fi
+    done
+}
+
+astrax_check_dvb_tools() {
+    for astrax_tool in "$1/usr/bin/sudo" "$1/usr/sbin/visudo"; do
+        [ -x "$astrax_tool" ] || { echo "required DVB ownership tool missing: $astrax_tool" >&2; return 1; }
+    done
+}
+
+astrax_secure_file() {
+    [ -f "$2" ] && [ ! -L "$2" ] && [ -n "$(find "$2" -prune -type f -perm "$3" -print)" ] || {
+        echo "unsafe file type/mode: $2" >&2; return 1
+    }
+    if [ "$1" = / ]; then
+        [ -n "$(find "$2" -prune -uid 0 -gid 0 -print)" ] || {
+            echo "file must be root:root: $2" >&2; return 1
+        }
+    fi
+}
+
+astrax_secure_directory() {
+    [ -d "$2" ] && [ ! -L "$2" ] && [ -n "$(find "$2" -prune -type d -perm 755 -print)" ] || {
+        echo "unsafe runtime directory: $2" >&2; return 1
+    }
+    if [ "$1" = / ]; then
+        [ -n "$(find "$2" -prune -uid 0 -gid 0 -print)" ] || return 1
+    fi
+}
+
+astrax_sudoers_text() {
+    astrax_helper_digest=$(sha256sum "$1" | cut -d ' ' -f 1)
+    [ "${#astrax_helper_digest}" -eq 64 ] || return 1
+    case "$astrax_helper_digest" in *[!0-9a-f]*) return 1 ;; esac
+    printf 'astrax ALL=(root) NOPASSWD: NOSETENV: sha256:%s /opt/astrax/astrax-dvb-owners ""\n' "$astrax_helper_digest"
+}
+
+astrax_validate_sudoers() {
+    "$1/usr/sbin/visudo" -cf "$2" >/dev/null || { echo 'DVB ownership sudoers validation failed' >&2; return 1; }
+}
+
+astrax_publish_file() {
+    [ ! -e "$2" ] && [ ! -L "$2" ] || { echo "existing path: $2" >&2; return 1; }
+    ln "$1" "$2" || return 1
+    [ "$1" -ef "$2" ] && return 0
+    # A directory raced the no-clobber link; remove only our accidental link.
+    astrax_accidental="$2/$(basename "$1")"
+    if [ "$1" -ef "$astrax_accidental" ]; then rm -f "$astrax_accidental"; fi
+    echo "path changed during publication: $2" >&2
+    return 1
+}
+
 astrax_preflight() {
     root=$1
     payload=$2
     [ "$root" != / ] || [ "$(id -u)" -eq 0 ] || { echo 'root required' >&2; return 1; }
-    [ -f "$payload/astrax" ] && [ -f "$payload/MANIFEST.json" ] && [ -f "$payload/lib/libastrax_srt.so.1.4.0" ] || {
-        echo 'incomplete verified payload' >&2; return 1
+    for name in astrax MANIFEST.json lib/libastrax_srt.so.1.4.0 astrax-dvb-owners dvb-owner-helper share/build/dvb-owner-helper.sh; do
+        [ -f "$payload/$name" ] && [ ! -L "$payload/$name" ] || { echo "incomplete verified payload: $name" >&2; return 1; }
+    done
+    cmp -s "$payload/dvb-owner-helper" "$payload/share/build/dvb-owner-helper.sh" || {
+        echo 'DVB ownership launcher source mismatch' >&2; return 1
     }
     astrax_check_abi "$root" || return 1
+    astrax_check_dvb_tools "$root" || return 1
+    astrax_check_parent_paths "$root" || return 1
     init=$(astrax_detect_init "$root") || return 1
     astrax_check_release_target "$root" "$init" || return 1
     service=$(astrax_service_path "$root" "$init")
     for path in "$root/opt/astrax" "$root/var/lib/astrax" \
-        "$root/etc/systemd/system/astrax.service" "$root/etc/init.d/astrax"; do
+        "$root/etc/systemd/system/astrax.service" "$root/etc/init.d/astrax" \
+        "$root/etc/sudoers.d/astrax-dvb-owners"; do
         [ ! -e "$path" ] && [ ! -L "$path" ] || { echo "existing path: $path" >&2; return 1; }
     done
     [ "$(astrax_account_status "$root")" != incompatible ] || { echo 'incompatible astrax account' >&2; return 1; }
@@ -144,9 +213,15 @@ astrax_preflight() {
 }
 
 astrax_rollback() {
+    if [ "${astrax_created_sudoers:-0}" -eq 1 ] && [ "$astrax_sudoers_stage" -ef "$astrax_sudoers" ]; then
+        rm -f "$astrax_sudoers"
+    fi
+    if [ "${astrax_created_service:-0}" -eq 1 ] && [ "$astrax_service_stage" -ef "$astrax_service" ]; then
+        rm -f "$astrax_service"
+    fi
+    [ -z "${astrax_sudoers_stage:-}" ] || rm -f "$astrax_sudoers_stage"
     [ -z "${astrax_stage:-}" ] || rm -rf "$astrax_stage"
     [ -z "${astrax_service_stage:-}" ] || rm -f "$astrax_service_stage"
-    [ "${astrax_created_service:-0}" -eq 0 ] || rm -f "$astrax_service"
     [ "${astrax_created_runtime:-0}" -eq 0 ] || rm -rf "$astrax_root/opt/astrax"
     [ "${astrax_created_state:-0}" -eq 0 ] || rm -rf "$astrax_root/var/lib/astrax"
     if [ "${astrax_created_account:-0}" -eq 1 ]; then
@@ -159,16 +234,25 @@ astrax_install() {
     payload=$2
     astrax_init=$(astrax_preflight "$astrax_root" "$payload") || return 1
     astrax_service=$(astrax_service_path "$astrax_root" "$astrax_init")
+    astrax_sudoers="$astrax_root/etc/sudoers.d/astrax-dvb-owners"
     astrax_created_account=0
     astrax_created_state=0
     astrax_created_runtime=0
     astrax_created_service=0
+    astrax_created_sudoers=0
     astrax_service_stage=
+    astrax_sudoers_stage=
     mkdir -p "$astrax_root/opt" || return 1
     astrax_stage=$(mktemp -d "$astrax_root/opt/.astrax-stage.XXXXXX") || return 1
     trap 'astrax_rollback' 0
     trap 'exit 1' 1 2 3 15
     cp -R "$payload/." "$astrax_stage/" || return 1
+    mkdir -p "$astrax_root/etc/sudoers.d" || return 1
+    astrax_sudoers_stage=$(mktemp "$astrax_root/etc/sudoers.d/.astrax-dvb-owners.XXXXXX") || return 1
+    astrax_sudoers_text "$astrax_stage/astrax-dvb-owners" > "$astrax_sudoers_stage" || return 1
+    chmod 440 "$astrax_sudoers_stage" || return 1
+    if [ "$astrax_root" = / ]; then chown root:root "$astrax_sudoers_stage" || return 1; fi
+    astrax_validate_sudoers "$astrax_root" "$astrax_sudoers_stage" || return 1
     if [ "$(astrax_account_status "$astrax_root")" = absent ]; then
         if [ "$astrax_root" = / ]; then
             useradd --system --user-group --home-dir /var/lib/astrax --shell /usr/sbin/nologin astrax || return 1
@@ -208,13 +292,17 @@ astrax_install() {
     cp -R "$astrax_stage/." "$astrax_root/opt/astrax/" || return 1
     find "$astrax_root/opt/astrax" -type d -exec chmod 755 {} \; || return 1
     find "$astrax_root/opt/astrax" -type f -exec chmod 644 {} + || return 1
-    chmod 755 "$astrax_root/opt/astrax/astrax" || return 1
+    chmod 755 "$astrax_root/opt/astrax/astrax" "$astrax_root/opt/astrax/astrax-dvb-owners" \
+        "$astrax_root/opt/astrax/dvb-owner-helper" || return 1
+    if [ "$astrax_root" = / ]; then chown -R root:root "$astrax_root/opt/astrax" || return 1; fi
     rm -rf "$astrax_stage"
     astrax_stage=
     if [ "$astrax_root" != / ] && [ "${ASTRAX_TEST_FAIL_AFTER:-}" = runtime ]; then
         echo 'injected runtime failure' >&2
         return 1
     fi
+    astrax_publish_file "$astrax_sudoers_stage" "$astrax_sudoers" || return 1
+    astrax_created_sudoers=1
     template_dir=${ASTRAX_TEMPLATE_DIR:-}
     [ -n "$template_dir" ] && [ -f "$template_dir/$astrax_init.in" ] || { echo 'init template missing' >&2; return 1; }
     mkdir -p "$(dirname "$astrax_service")" || return 1
@@ -225,11 +313,14 @@ astrax_install() {
         return 1
     fi
     if [ "$astrax_init" = systemd ]; then chmod 644 "$astrax_service_stage"; else chmod 755 "$astrax_service_stage"; fi
-    ln "$astrax_service_stage" "$astrax_service" || return 1
+    if [ "$astrax_root" = / ]; then chown root:root "$astrax_service_stage" || return 1; fi
+    astrax_publish_file "$astrax_service_stage" "$astrax_service" || return 1
     astrax_created_service=1
+    if [ "$astrax_root" = / ] && [ "$astrax_init" = systemd ]; then systemctl daemon-reload || return 1; fi
     rm -f "$astrax_service_stage"
     astrax_service_stage=
-    if [ "$astrax_root" = / ] && [ "$astrax_init" = systemd ]; then systemctl daemon-reload || return 1; fi
+    rm -f "$astrax_sudoers_stage"
+    astrax_sudoers_stage=
     trap - 0 1 2 3 15
     echo "AstraX installed; $astrax_init service created but not enabled or started"
 }
@@ -294,23 +385,37 @@ astrax_disable_service() {
 astrax_activate() {
     root=$1
     payload=$2
+    [ "${ASTRAX_PRIVATE_INSTALL_QA:-0}" != 1 ] || { echo 'private installer QA package cannot activate a service' >&2; return 1; }
     [ "$root" != / ] || [ "$(id -u)" -eq 0 ] || { echo 'root required' >&2; return 1; }
     astrax_check_abi "$root" || return 1
+    astrax_check_dvb_tools "$root" || return 1
+    astrax_check_parent_paths "$root" || return 1
     init=$(astrax_detect_init "$root") || return 1
     astrax_check_release_target "$root" "$init" || return 1
     service=$(astrax_service_path "$root" "$init")
     template_dir=${ASTRAX_TEMPLATE_DIR:-}
     [ -f "$template_dir/$init.in" ] && [ -f "$service" ] || { echo 'service definition missing' >&2; return 1; }
-    for name in astrax MANIFEST.json lib/libastrax_srt.so.1.4.0; do
+    for name in astrax astrax-dvb-owners dvb-owner-helper MANIFEST.json lib/libastrax_srt.so.1.4.0; do
+        case "$name" in astrax|astrax-dvb-owners|dvb-owner-helper) mode=755 ;; *) mode=644 ;; esac
+        astrax_secure_file "$root" "$root/opt/astrax/$name" "$mode" || return 1
         cmp -s "$root/opt/astrax/$name" "$payload/$name" || {
             echo "installed $name does not match this package" >&2
             return 1
         }
     done
+    astrax_secure_directory "$root" "$root/opt/astrax" || return 1
+    astrax_secure_directory "$root" "$root/opt/astrax/lib" || return 1
     [ "$(readlink "$root/opt/astrax/lib/libastrax_srt.so.1" 2>/dev/null)" = libastrax_srt.so.1.4.0 ] || {
         echo 'installed SRT SONAME link mismatch' >&2; return 1
     }
     cmp -s "$service" "$template_dir/$init.in" || { echo 'service definition mismatch' >&2; return 1; }
+    if [ "$init" = systemd ]; then mode=644; else mode=755; fi
+    astrax_secure_file "$root" "$service" "$mode" || return 1
+    astrax_secure_file "$root" "$root/etc/sudoers.d/astrax-dvb-owners" 440 || return 1
+    expected=$(astrax_sudoers_text "$payload/astrax-dvb-owners" | sha256sum | cut -d ' ' -f 1)
+    actual=$(sha256sum "$root/etc/sudoers.d/astrax-dvb-owners" | cut -d ' ' -f 1)
+    [ "$actual" = "$expected" ] || { echo 'installed DVB ownership sudoers mismatch' >&2; return 1; }
+    astrax_validate_sudoers "$root" "$root/etc/sudoers.d/astrax-dvb-owners" || return 1
     [ -d "$root/var/lib/astrax" ] || { echo 'state directory missing' >&2; return 1; }
     [ "$(astrax_account_status "$root")" = compatible ] || {
         echo 'compatible astrax account required for activation' >&2
@@ -337,7 +442,8 @@ astrax_activate() {
     echo '  ssh -L 8080:127.0.0.1:8080 USER@HOST'
     echo 'Before first enrollment, read the owner-only setup file locally as root:'
     echo '  /var/lib/astrax/astrax-config.json.admin-setup'
-    echo 'Enter its one-time secret in the setup page; the installer never prints the secret.'
+    echo 'Enter its one-time secret in the setup page and set the named admin account password; the installer never prints the secret.'
+    echo 'Sign in as admin with your username and password. Use Users to manage Administrator, Operator and Viewer roles.'
 }
 
 if [ "${ASTRAX_CORE_LIBRARY_ONLY:-}" = 1 ]; then

@@ -14,7 +14,7 @@ case "$1" in
     start)
         start-stop-daemon --start --background --make-pidfile --pidfile /run/astrax.pid \
             --chuid astrax:astrax --exec /opt/astrax/astrax -- \
-            --config /var/lib/astrax/astrax-config.json
+            --config /var/lib/astrax/astrax-config.json --dvb-owner-helper /opt/astrax/dvb-owner-helper
         ;;
     stop)
         start-stop-daemon --stop --pidfile /run/astrax.pid --retry TERM/20/KILL/5

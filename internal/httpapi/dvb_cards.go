@@ -35,7 +35,7 @@ func (s *Server) handleDVBCards(w http.ResponseWriter, r *http.Request) {
 			respondDVBError(w, err)
 			return
 		}
-		if _, external := externalPrincipal(r); external {
+		if _, external := externalPrincipal(r); external || restrictedManagement(r) {
 			writeJSON(w, 200, s.store.ListPublicDVBCards(query))
 		} else {
 			writeJSON(w, 200, s.store.ListDVBCards(query))

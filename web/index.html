@@ -6,9 +6,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AstraX</title>
-    <link rel="stylesheet" href="/app.css?v=27" />
-    <link rel="stylesheet" href="/dvb-management.css?v=27" />
-    <link rel="stylesheet" href="/api-management.css?v=1" />
+    <link rel="stylesheet" href="/app.css?v=29" />
+    <link rel="stylesheet" href="/dvb-management.css?v=29" />
+    <link rel="stylesheet" href="/api-management.css?v=2" />
+    <link rel="stylesheet" href="/users.css?v=1" />
   </head>
   <body>
     <div class="orb orb-one"></div>
@@ -17,26 +18,32 @@
     <main id="authView" class="auth-shell" aria-labelledby="authTitle">
       <div class="auth-brand"><span class="auth-mark" aria-hidden="true">AX</span><span>AstraX / Management</span></div>
       <section class="auth-card">
-        <p class="auth-eyebrow">Administrator access</p>
-        <h1 id="authTitle">Secure your control panel</h1>
-        <p class="auth-lede">Sign in to manage streams, adapters and settings. Management stays unavailable until your session is verified.</p>
-        <p class="auth-address">Connected management address <strong id="authManagementAddress"></strong></p>
+        <h1 id="authTitle">Sign in</h1>
+        <p id="authLede" class="auth-lede">Manage your streams, DVB cards and settings.</p>
+        <p id="authStatus" class="auth-status" role="status" aria-live="polite">Checking your session...</p>
         <p id="authNotice" class="notice err" role="alert" aria-live="assertive" hidden></p>
         <form id="authSetupForm" class="auth-form" hidden>
-          <h2>First-time setup</h2>
-          <p>On the AstraX host, read the owner-only file beside your config: <code>&lt;config-file&gt;.admin-setup</code>. The secret is never shown in this browser.</p>
+          <details class="auth-setup-help"><summary>Where is my one-time secret?</summary><p>Read the owner-only file beside your configuration on the AstraX host: <code>&lt;config-file&gt;.admin-setup</code>. The secret is never shown in this browser.</p></details>
           <label>One-time setup secret<input name="secret" type="password" autocomplete="off" required /></label>
-          <label>New administrator password<input name="password" type="password" autocomplete="off" required minlength="12" /></label>
-          <label>Confirm password<input name="confirm_password" type="password" autocomplete="off" required minlength="12" /></label>
+          <label>Initial administrator username<input name="username" type="text" autocomplete="username" required maxlength="64" value="admin" readonly /></label>
+          <label>New password<input name="password" type="password" autocomplete="new-password" required minlength="12" aria-describedby="authPasswordHint" /></label>
+          <p id="authPasswordHint" class="hint">At least 12 characters. Use three of: uppercase letters, lowercase letters, numbers and symbols.</p>
+          <label>Confirm password<input name="confirm_password" type="password" autocomplete="new-password" required minlength="12" /></label>
           <button type="submit">Create administrator</button>
         </form>
         <form id="authLoginForm" class="auth-form" hidden>
-          <h2>Administrator login</h2>
-          <label>Password<input name="password" type="password" autocomplete="off" required /></label>
+          <label>Username<input name="username" type="text" autocomplete="username" required maxlength="64" autocapitalize="none" spellcheck="false" /></label>
+          <div class="auth-password-field">
+            <label for="authPassword">Password</label>
+            <div class="auth-password-wrap">
+              <input id="authPassword" name="password" type="password" autocomplete="current-password" required />
+              <button type="button" id="authPasswordToggle" class="auth-password-toggle" aria-label="Show password" aria-controls="authPassword" aria-pressed="false">Show</button>
+            </div>
+          </div>
           <button type="submit">Sign in</button>
         </form>
       </section>
-      <p class="auth-foot">AstraX / Local administrator</p>
+      <p class="auth-foot">Connected to <strong id="authManagementAddress"></strong></p>
     </main>
 
     <div id="dashboard" hidden>
@@ -46,7 +53,7 @@
         <h1>AstraX</h1>
         <p class="sub">DVB Streaming Server</p>
       </div>
-      <div class="topbar-actions"><span class="management-address">Management: <strong id="managementAddress"></strong></span><div class="status-pill" id="statusPill" role="status">Loading...</div><button id="logoutButton" type="button" class="secondary">Sign out</button></div>
+      <div class="topbar-actions"><span class="management-address">Management: <strong id="managementAddress"></strong></span><div class="status-pill" id="statusPill" role="status">Loading...</div><span id="currentUserLabel" class="account-label"></span><button id="logoutButton" type="button" class="secondary">Sign out</button></div>
     </header>
     <p id="globalActionNotice" class="notice global-action-notice" role="status" aria-live="polite" hidden></p>
 
@@ -62,6 +69,8 @@
         <button type="button" data-tab="api">API</button>
         <button type="button" data-tab="settings">Settings</button>
         <button type="button" data-tab="logs">Logs</button>
+        <button type="button" data-tab="users" hidden>Users</button>
+        <button type="button" data-tab="account">My account</button>
       </nav>
 
       <section class="content">
@@ -536,12 +545,95 @@
             </div>
           </fieldset>
           <div class="section-divider"></div>
+
+        </article>
+
+        <section data-panel="users" class="panel users-page" aria-labelledby="usersTitle">
+          <header class="users-heading">
+            <div>
+              <p class="users-eyebrow">ACCESS CONTROL</p>
+              <h2 id="usersTitle">Users</h2>
+              <p class="users-lede">Named accounts, clear permissions. Only administrators can manage users.</p>
+            </div>
+            <button type="button" data-users="create" disabled>Create account</button>
+          </header>
+
+          <dl class="users-roles" aria-label="Account roles">
+            <div><dt>Administrator</dt><dd>Full management access, including accounts and configuration.</dd></div>
+            <div><dt>Operator</dt><dd>View monitoring and start, stop, or restart existing streams. No configuration or DVB-card changes.</dd></div>
+            <div><dt>Viewer</dt><dd>Read-only monitoring. No stream controls or management settings.</dd></div>
+          </dl>
+
+          <p data-users="notice" class="users-notice" role="status" aria-live="polite" aria-atomic="true" hidden></p>
+          <div class="users-toolbar">
+            <label for="usersSearch">Search accounts
+              <input id="usersSearch" data-users="search" type="search" placeholder="Username, role, or status" autocomplete="off" disabled>
+            </label>
+            <p data-users="count" class="users-count" role="status" aria-live="polite">Accounts not loaded</p>
+            <button type="button" data-users="refresh" class="secondary" disabled>Refresh list</button>
+          </div>
+          <p data-users="list-notice" class="users-notice" role="status" aria-live="polite" aria-atomic="true" hidden></p>
+          <ul data-users="list" class="users-list" aria-label="User accounts"></ul>
+          <p data-users="empty" class="users-empty" hidden>No accounts.</p>
+          <p class="users-footnote">Up to 64 accounts. Changes immediately sign the affected account out of all sessions. Keep at least one enabled administrator.</p>
+
+          <dialog data-users="dialog" class="users-dialog" aria-labelledby="usersDialogTitle" aria-describedby="usersDialogHelp">
+            <form data-users="form">
+              <header>
+                <p class="users-eyebrow">ACCOUNT DETAILS</p>
+                <h3 id="usersDialogTitle" data-users="dialog-title" tabindex="-1">Create account</h3>
+                <p id="usersDialogHelp" class="users-help">Saving changes signs this account out of all active sessions. Existing passwords are never displayed.</p>
+              </header>
+              <p data-users="self-warning" class="users-notice" hidden>You are editing your own account. Saving any changes will sign you out.</p>
+              <fieldset data-users="fields" disabled>
+                <legend class="users-sr-only">Account details</legend>
+                <label for="usersUsername">Username
+                  <input id="usersUsername" data-users="username" name="username" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+                </label>
+                <label for="usersRole">Role
+                  <select id="usersRole" data-users="role" name="role" required>
+                    <option value="viewer" selected>Viewer</option>
+                    <option value="operator">Operator</option>
+                    <option value="administrator">Administrator</option>
+                  </select>
+                </label>
+                <label for="usersEnabled" data-users="enabled-row" class="users-checkbox" hidden>
+                  <input id="usersEnabled" data-users="enabled" name="enabled" type="checkbox" checked>
+                  Account enabled
+                </label>
+                <label for="usersResetPassword" data-users="reset-row" class="users-checkbox" hidden>
+                  <input id="usersResetPassword" data-users="reset-password" type="checkbox" aria-controls="usersPasswordFields" aria-expanded="false">
+                  Reset password (optional)
+                </label>
+                <div id="usersPasswordFields" data-users="password-fields" class="users-password-fields">
+                  <label for="usersPassword">New password
+                    <input id="usersPassword" data-users="password" name="new_password" type="password" autocomplete="new-password" spellcheck="false" aria-describedby="usersPasswordHelp" required>
+                  </label>
+                  <label for="usersPasswordConfirm">Confirm new password
+                    <input id="usersPasswordConfirm" data-users="password-confirm" type="password" autocomplete="new-password" spellcheck="false" required>
+                  </label>
+                  <p id="usersPasswordHelp" class="users-help">Enter a new password twice. Share it with the account owner through a secure channel.</p>
+                </div>
+              </fieldset>
+              <p data-users="form-notice" class="users-notice" role="status" aria-live="polite" aria-atomic="true" hidden></p>
+              <footer class="users-dialog-actions">
+                <button type="button" data-users="cancel" class="secondary">Cancel</button>
+                <button type="submit" data-users="save" disabled>Create account</button>
+              </footer>
+            </form>
+          </dialog>
+        </section>
+
+        <article data-panel="account" class="panel" aria-labelledby="accountTitle">
+          <h2 id="accountTitle">My account</h2>
+          <p class="panel-description">Signed in as <strong id="accountUsername"></strong> with the <strong id="accountRole"></strong> role.</p>
+          <p class="hint">Administrators manage configuration and accounts. Operators can monitor and control existing streams. Viewers have read-only monitoring access.</p>
           <form id="changePasswordForm" class="auth-form password-form">
-            <h2>Administrator password</h2>
-            <p class="hint">Changing the password signs out every active session.</p>
-            <label>Current password<input name="old_password" type="password" autocomplete="off" required /></label>
-            <label>New password<input name="new_password" type="password" autocomplete="off" required minlength="12" /></label>
-            <label>Confirm new password<input name="confirm_password" type="password" autocomplete="off" required minlength="12" /></label>
+            <h2>Change password</h2>
+            <p class="hint">Changing your password signs out your own sessions, not other users.</p>
+            <label>Current password<input name="old_password" type="password" autocomplete="current-password" required /></label>
+            <label>New password<input name="new_password" type="password" autocomplete="new-password" required minlength="12" /></label>
+            <label>Confirm new password<input name="confirm_password" type="password" autocomplete="new-password" required minlength="12" /></label>
             <p id="passwordNotice" role="alert" aria-live="assertive"></p>
             <button type="submit">Change password</button>
           </form>
@@ -1207,6 +1299,6 @@
       </div>
     </dialog>
     </div>
-    <script type="module" src="/app.js?v=39"></script>
+    <script type="module" src="/app.js?v=40"></script>
   </body>
 </html>

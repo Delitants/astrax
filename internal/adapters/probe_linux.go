@@ -104,7 +104,15 @@ type identityCandidate struct {
 var ioctlGetFrontendInfo = ior(ioctlTypeDVB, 61, unsafe.Sizeof(dvbFrontendInfo{}))
 
 func linuxDVBCards(ctx context.Context) ([]model.DVBCard, error) {
-	return detectDVBAtContext(ctx, "/dev", "/sys", "/proc", systemFrontendInspector)
+	return linuxDVBCardsWithHelper(ctx, "")
+}
+
+func linuxDVBCardsWithHelper(ctx context.Context, helper string) ([]model.DVBCard, error) {
+	deps := defaultDetectionDeps(systemFrontendInspector)
+	if helper != "" {
+		deps.lookupOwners = helperOwnerLookup(helper)
+	}
+	return detectDVBAtWithDepsContext(ctx, "/dev", "/sys", "/proc", deps)
 }
 
 func linuxDVBAdapters() []model.Adapter {

@@ -8,6 +8,7 @@ import os
 import stat
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -18,6 +19,33 @@ from packaging.tests.test_build_run import make_release, TEST_IDENTITY
 
 
 MARKER = b"__ASTRAX_PAYLOAD_BELOW__\n"
+
+
+class DVBOwnerWrapperTests(unittest.TestCase):
+    def test_launcher_has_fixed_sudo_argv_and_rejects_arguments(self):
+        wrapper = Path(__file__).resolve().parents[1] / "dvb-owner-helper.sh"
+        self.assertTrue(wrapper.is_file(), "the no-argument launcher is missing")
+        source = wrapper.read_text()
+        self.assertEqual(
+            [line for line in source.splitlines() if line.startswith("exec ")],
+            ["exec /usr/bin/sudo -n -- /opt/astrax/astrax-dvb-owners"],
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            sudo = base / "sudo-fixture"
+            sudo.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            sudo.chmod(0o755)
+            safe_wrapper = base / "wrapper.sh"
+            # Never invoke the real sudo in a local packaging test.
+            safe_wrapper.write_text(source.replace("/usr/bin/sudo", str(sudo)))
+            result = subprocess.run(["sh", str(safe_wrapper)], text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.splitlines(), ["-n", "--", "/opt/astrax/astrax-dvb-owners"])
+            for args in (("--kill", "123"), ("",), ("/bin/sh",)):
+                with self.subTest(args=args):
+                    result = subprocess.run(["sh", str(safe_wrapper), *args], text=True, capture_output=True)
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertEqual(result.stdout, "")
 
 
 class InstallerHeaderTests(unittest.TestCase):
@@ -63,6 +91,9 @@ class InstallerHeaderTests(unittest.TestCase):
         destination = self.base / "extracted"
         self.assertEqual(self.run_installer("--extract", destination).returncode, 0)
         self.assertEqual((destination / "astrax").read_bytes(), b"\x7fELFsynthetic-astrax")
+        self.assertEqual((destination / "astrax-dvb-owners").read_bytes(), b"\x7fELFsynthetic-dvb-owners")
+        self.assertEqual(stat.S_IMODE((destination / "astrax-dvb-owners").stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE((destination / "dvb-owner-helper").stat().st_mode), 0o755)
         self.assertEqual((destination / "lib/libastrax_srt.so.1").readlink().as_posix(), "libastrax_srt.so.1.4.0")
         self.assertFalse((self.base / "astrax-ran").exists())
 
@@ -210,6 +241,30 @@ class InstallerCoreTests(unittest.TestCase):
         (self.root / "qa").mkdir()
         (self.root / "qa/abi-ok").touch()
         self.repo = Path(__file__).resolve().parents[2]
+        self.visudo = self.root / "usr/sbin/visudo"
+        self.visudo.parent.mkdir(parents=True)
+        self.visudo.write_text(
+            "#!/bin/sh\n"
+            '[ "$#" -eq 2 ] && [ "$1" = -cf ] || exit 2\n'
+            f'root="{self.root}"\n'
+            'case "$2" in "$root"/*) ;; *) exit 2 ;; esac\n'
+            '[ -f "$2" ] && [ ! -L "$2" ] || exit 1\n'
+            'printf "%s\\n" "$2" >> "$root/qa/visudo-calls"\n'
+            '[ ! -f "$root/qa/visudo-reject" ] || exit 1\n'
+            'policy="$root/etc/sudoers.d/astrax-dvb-owners"\n'
+            'if [ "$2" != "$policy" ]; then\n'
+            '    [ ! -e "$policy" ] && [ ! -L "$policy" ] || exit 1\n'
+            '    if [ -f "$root/qa/visudo-race-file" ]; then printf "keep me" > "$policy"; fi\n'
+            '    if [ -f "$root/qa/visudo-race-dir" ]; then mkdir "$policy"; printf "keep me" > "$policy/keep"; fi\n'
+            '    if [ -f "$root/qa/visudo-race-link" ]; then ln -s "$root/qa/keep" "$policy"; fi\n'
+            'fi\n'
+            "grep -Eq '^astrax ALL=\\(root\\) NOPASSWD: NOSETENV: sha256:[0-9a-f]{64} /opt/astrax/astrax-dvb-owners \"\"$' \"$2\"\n"
+        )
+        self.visudo.chmod(0o755)
+        sudo = self.root / "usr/bin/sudo"
+        sudo.parent.mkdir(parents=True)
+        sudo.write_text("#!/bin/sh\nexit 99\n")
+        sudo.chmod(0o755)
 
     def configure_init(self, init):
         (self.root / "run/openrc/softlevel").unlink(missing_ok=True)
@@ -237,6 +292,224 @@ class InstallerCoreTests(unittest.TestCase):
             ["sh", "-c", script, "sh", str(self.root), str(self.release)],
             env=env, text=True, capture_output=True, check=False,
         )
+
+    def test_install_requires_helper_launcher_and_visudo_before_writes(self):
+        self.configure_init("systemd")
+        for path in (self.release / "astrax-dvb-owners", self.release / "dvb-owner-helper", self.visudo,
+                     self.root / "usr/bin/sudo"):
+            with self.subTest(missing=path):
+                saved = path.read_bytes()
+                mode = stat.S_IMODE(path.stat().st_mode)
+                path.unlink()
+                result = self.run_core("astrax_install")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((self.root / "opt/astrax").exists())
+                self.assertFalse((self.root / "qa/account").exists())
+                path.write_bytes(saved)
+                path.chmod(mode)
+
+    def test_install_rejects_symlink_helper_inputs(self):
+        self.configure_init("systemd")
+        for name in ("astrax-dvb-owners", "dvb-owner-helper"):
+            with self.subTest(name=name):
+                path = self.release / name
+                real = self.base / name
+                path.rename(real)
+                path.symlink_to(real)
+                result = self.run_core("astrax_install")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((self.root / "opt/astrax").exists())
+                path.unlink()
+                real.rename(path)
+
+    def test_install_writes_digest_only_empty_args_policy_and_immutable_runtime(self):
+        self.configure_init("systemd")
+        result = self.run_core("astrax_install", restrictive_umask=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        runtime = self.root / "opt/astrax"
+        for name in ("astrax", "astrax-dvb-owners", "dvb-owner-helper"):
+            with self.subTest(name=name):
+                self.assertEqual((runtime / name).read_bytes(), (self.release / name).read_bytes())
+                self.assertEqual(stat.S_IMODE((runtime / name).stat().st_mode), 0o755)
+        policy = self.root / "etc/sudoers.d/astrax-dvb-owners"
+        digest = hashlib.sha256(b"\x7fELFsynthetic-dvb-owners").hexdigest()
+        self.assertEqual(policy.read_text(), f'astrax ALL=(root) NOPASSWD: NOSETENV: sha256:{digest} /opt/astrax/astrax-dvb-owners ""\n')
+        self.assertEqual(stat.S_IMODE(policy.stat().st_mode), 0o440)
+        calls = (self.root / "qa/visudo-calls").read_text().splitlines()
+        self.assertEqual(len(calls), 1)
+        self.assertNotEqual(calls[0], str(policy), "policy must be validated before publishing")
+        self.assertFalse(Path(calls[0]).exists(), "staging file must be removed")
+        self.assertFalse((self.root / "qa/service-actions").exists())
+
+    def test_each_template_passes_launcher_flag_and_keeps_nonroot_identity(self):
+        for init, service in (("systemd", "etc/systemd/system/astrax.service"),
+                              ("openrc", "etc/init.d/astrax"), ("sysv", "etc/init.d/astrax")):
+            with self.subTest(init=init):
+                self.configure_init(init)
+                result = self.run_core("astrax_install")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                text = (self.root / service).read_text()
+                self.assertIn("--dvb-owner-helper /opt/astrax/dvb-owner-helper", text)
+                identity = {"systemd": "User=astrax", "openrc": 'command_user="astrax:astrax"',
+                            "sysv": "--chuid astrax:astrax"}[init]
+                self.assertIn(identity, text)
+                self.assertNotIn("User=root", text)
+                self.assertNotIn("CAP_SYS_PTRACE", text)
+                self.assertNotIn("CAP_KILL", text)
+                (self.root / service).unlink()
+                (self.root / "etc/sudoers.d/astrax-dvb-owners").unlink(missing_ok=True)
+                shutil.rmtree(self.root / "opt/astrax")
+                shutil.rmtree(self.root / "var/lib/astrax")
+                (self.root / "qa/account").unlink(missing_ok=True)
+
+    def test_existing_policy_file_directory_or_symlink_is_preserved(self):
+        self.configure_init("systemd")
+        policy = self.root / "etc/sudoers.d/astrax-dvb-owners"
+        policy.parent.mkdir(parents=True)
+        keep = self.root / "qa/keep"
+        keep.write_text("untouched")
+        for kind in ("file", "directory", "symlink"):
+            with self.subTest(kind=kind):
+                if kind == "file":
+                    policy.write_text("keep me")
+                elif kind == "directory":
+                    policy.mkdir()
+                else:
+                    policy.symlink_to(keep)
+                result = self.run_core("astrax_install")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertTrue(policy.exists())
+                self.assertEqual(keep.read_text(), "untouched")
+                self.assertFalse((self.root / "opt/astrax").exists())
+                if kind == "file":
+                    self.assertEqual(policy.read_text(), "keep me")
+                if kind == "directory":
+                    policy.rmdir()
+                else:
+                    policy.unlink()
+
+    def test_symlink_sudoers_parent_is_refused_without_touching_target(self):
+        self.configure_init("systemd")
+        target = self.base / "unrelated-policy-dir"
+        target.mkdir()
+        (self.root / "etc").mkdir()
+        (self.root / "etc/sudoers.d").symlink_to(target)
+        result = self.run_core("astrax_install")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(list(target.iterdir()), [])
+        self.assertFalse((self.root / "opt/astrax").exists())
+
+    def test_visudo_rejection_rolls_back_without_touching_other_policy_or_account(self):
+        self.configure_init("systemd")
+        (self.root / "qa/account").write_text("compatible")
+        (self.root / "qa/visudo-reject").touch()
+        unrelated = self.root / "etc/sudoers.d/other"
+        unrelated.parent.mkdir(parents=True)
+        unrelated.write_text("keep me")
+        result = self.run_core("astrax_install")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(unrelated.read_text(), "keep me")
+        self.assertEqual((self.root / "qa/account").read_text(), "compatible")
+        self.assertFalse((self.root / "opt/astrax").exists())
+        self.assertFalse((self.root / "var/lib/astrax").exists())
+        self.assertEqual(sorted(path.name for path in unrelated.parent.iterdir()), ["other"])
+
+    def test_raced_policy_is_not_overwritten_or_removed(self):
+        self.configure_init("systemd")
+        keep = self.root / "qa/keep"
+        keep.write_text("untouched")
+        policy = self.root / "etc/sudoers.d/astrax-dvb-owners"
+        for kind in ("file", "dir", "link"):
+            with self.subTest(kind=kind):
+                marker = self.root / f"qa/visudo-race-{kind}"
+                marker.touch()
+                result = self.run_core("astrax_install")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((self.root / "opt/astrax").exists())
+                self.assertFalse((self.root / "qa/account").exists())
+                self.assertEqual(keep.read_text(), "untouched")
+                if kind == "dir":
+                    self.assertEqual(sorted(path.name for path in policy.iterdir()), ["keep"])
+                    self.assertEqual((policy / "keep").read_text(), "keep me")
+                    shutil.rmtree(policy)
+                else:
+                    self.assertEqual(policy.read_text(), "untouched" if kind == "link" else "keep me")
+                    policy.unlink()
+                marker.unlink()
+
+    def test_late_failure_removes_only_its_new_sudo_policy_and_runtime(self):
+        self.configure_init("systemd")
+        unrelated = self.root / "etc/sudoers.d/other"
+        unrelated.parent.mkdir(parents=True)
+        unrelated.write_text("keep me")
+        result = self.run_core("astrax_install", extra_env={"ASTRAX_TEST_FAIL_SERVICE_STAGE": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "opt/astrax").exists())
+        self.assertFalse((self.root / "var/lib/astrax").exists())
+        self.assertEqual(list(unrelated.parent.iterdir()), [unrelated])
+        self.assertEqual(unrelated.read_text(), "keep me")
+
+    def test_activation_rejects_missing_or_modified_installed_security_files(self):
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        paths = ("opt/astrax/astrax-dvb-owners", "opt/astrax/dvb-owner-helper", "etc/sudoers.d/astrax-dvb-owners",
+                 "opt/astrax/lib/libastrax_srt.so.1.4.0", "etc/systemd/system/astrax.service")
+        for relative in paths:
+            path = self.root / relative
+            self.assertTrue(path.is_file(), relative)
+            saved, mode = path.read_bytes(), stat.S_IMODE(path.stat().st_mode)
+            for alteration in ("missing", "modified", "symlink"):
+                with self.subTest(path=relative, alteration=alteration):
+                    try:
+                        path.unlink()
+                        if alteration == "modified":
+                            path.write_text("modified")
+                            path.chmod(mode)
+                        elif alteration == "symlink":
+                            target = self.base / ("symlink-target-" + relative.replace("/", "-"))
+                            target.write_bytes(saved)
+                            target.chmod(mode)
+                            path.symlink_to(target)
+                        result = self.run_core("astrax_activate")
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertFalse((self.root / "qa/service-actions").exists())
+                    finally:
+                        path.unlink(missing_ok=True)
+                        path.write_bytes(saved)
+                        path.chmod(mode)
+
+    def test_activation_rechecks_runtime_policy_and_unit_modes(self):
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        for relative in ("opt/astrax", "opt/astrax/astrax", "opt/astrax/astrax-dvb-owners", "opt/astrax/dvb-owner-helper",
+                         "opt/astrax/lib/libastrax_srt.so.1.4.0", "etc/sudoers.d/astrax-dvb-owners", "etc/systemd/system/astrax.service"):
+            with self.subTest(path=relative):
+                path = self.root / relative
+                self.assertTrue(path.exists(), relative)
+                mode = stat.S_IMODE(path.stat().st_mode)
+                try:
+                    path.chmod(0o777)
+                    result = self.run_core("astrax_activate")
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse((self.root / "qa/service-actions").exists())
+                finally:
+                    path.chmod(mode)
+
+    def test_activation_revalidates_installed_sudoers_before_service_actions(self):
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        (self.root / "qa/visudo-reject").touch()
+        result = self.run_core("astrax_activate")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "qa/service-actions").exists())
+
+    def test_private_qa_core_cannot_activate_even_after_install(self):
+        self.configure_init("systemd")
+        self.assertEqual(self.run_core("astrax_install").returncode, 0)
+        result = self.run_core("astrax_activate", extra_env={"ASTRAX_PRIVATE_INSTALL_QA": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("private installer QA", result.stderr)
+        self.assertFalse((self.root / "qa/service-actions").exists())
 
     def test_detects_running_init_not_installed_binary(self):
         for init in ("systemd", "openrc", "sysv"):
@@ -291,6 +564,7 @@ class InstallerCoreTests(unittest.TestCase):
                 self.assertIn("/var/lib/astrax/astrax-config.json", (self.root / service).read_text())
                 self.assertFalse((self.root / "qa/service-actions").exists())
                 (self.root / service).unlink()
+                (self.root / "etc/sudoers.d/astrax-dvb-owners").unlink(missing_ok=True)
                 import shutil
                 shutil.rmtree(self.root / "opt/astrax")
                 shutil.rmtree(self.root / "var/lib/astrax")
@@ -332,6 +606,7 @@ class InstallerCoreTests(unittest.TestCase):
                 (self.root / "qa/service-actions").unlink()
                 (self.root / "qa/service-enabled").unlink()
                 (self.root / service).unlink()
+                (self.root / "etc/sudoers.d/astrax-dvb-owners").unlink(missing_ok=True)
                 shutil.rmtree(self.root / "opt/astrax")
                 shutil.rmtree(self.root / "var/lib/astrax")
                 (self.root / "qa/account").unlink(missing_ok=True)
@@ -346,6 +621,9 @@ class InstallerCoreTests(unittest.TestCase):
         self.assertIn("SSH tunnel", result.stdout)
         self.assertIn("ssh -L 8080:127.0.0.1:8080 USER@HOST", result.stdout)
         self.assertNotIn("one-time secret:", result.stdout.lower())
+        self.assertIn("admin", result.stdout)
+        self.assertIn("username and password", result.stdout)
+        self.assertIn("Use Users to manage Administrator, Operator and Viewer roles.", result.stdout)
 
     def test_systemd_start_reports_exec_not_application_readiness(self):
         template = (self.repo / "packaging/init/systemd.in").read_text()

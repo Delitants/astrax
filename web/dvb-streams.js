@@ -9,6 +9,8 @@ const metric = (value, unit) => Number.isFinite(value) ? `${value}${unit}` : 'un
 const definiteRejection = reason => reason?.status >= 400 && reason.status < 500 && ![408, 499].includes(reason.status);
 const groupPath = id => `/api/v1/dvb-groups/${encodeURIComponent(id)}`;
 const labels = ['Name / group', 'Service / transponder', 'Requested card', 'Actual card', 'Output / state'];
+const bulkActions = [['start','Start'],['stop','Stop'],['restart','Restart'],['move_group','Move group'],['assign_adapter','Assign adapter'],['delete','Delete']];
+const controlActions = ['start','stop','restart'];
 const descramblingText = value => {
   const state = enums.descrambling_state.includes(value?.state) ? value.state : 'unavailable';
   const reason = enums.descrambling_reason.includes(value?.reason) && value.reason !== state ? ` / ${value.reason}` : '';
@@ -17,7 +19,7 @@ const descramblingText = value => {
 };
 
 // Scan imports have their own result identity contract and durable write fence.
-export function createDVBStreamsController({requestJSON, confirmAction = message => window.confirm(message), openEditor, editorWriteState = () => '', openScan, scanWriteState = () => '', onPageLoad = () => {}, root = document, window = globalThis.window}) {
+export function createDVBStreamsController({requestJSON, confirmAction = message => window.confirm(message), canManage = () => true, canControl = () => true, openEditor, editorWriteState = () => '', openScan, scanWriteState = () => '', onPageLoad = () => {}, root = document, window = globalThis.window}) {
   const doc = root.ownerDocument || root, find = id => root.querySelector(`#${id}`);
   const body = find('dvbStreamTableBody'), groupSelect = find('dvbGroupSelect'), rail = find('dvbGroupNav').querySelector('.dvb-group-entries');
   const form = find('dvbGroupForm'), dialog = find('dvbGroupDialog'), name = find('dvbGroupName');
@@ -65,6 +67,15 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
   const scanBusy = () => scanOpening || !!scanDialog?.open || !!scanWriteState();
   const otherWriteBusy = () => !!mutation || !!bulkLock || !!viewChange || editorBusy();
   const writeBusy = () => otherWriteBusy() || scanBusy();
+  const controlsAllowed = () => canManage() || canControl();
+  const bulkAllowed = action => canManage() ? bulkActions.some(([value]) => value === action) : canControl() && controlActions.includes(action);
+  function syncBulkActions(reset = false) {
+    const actions = bulkActions.filter(([value]) => bulkAllowed(value)), previous = bulk.Action.value;
+    if (JSON.stringify([...bulk.Action.options].map(option => option.value)) !== JSON.stringify(actions.map(([value]) => value))) {
+      bulk.Action.replaceChildren(...actions.map(([value,label]) => Object.assign(node('option',label),{value})));
+    }
+    bulk.Action.value = actions.some(([value]) => value === previous) ? previous : reset ? actions[0]?.[0] || '' : '';
+  }
   function bulkMessage(value, failure = false) {
     bulkText = value; bulkFailed = failure;
     if (active) message('dvbBulkNotice',value,failure);
@@ -108,7 +119,7 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
     return cardsReady && card && compatible(card) && (available(card) || retainedCard(card.device_key)) ? card : null;
   }
   function loadCards() {
-    if (!active || cardRead) return cardRead?.promise || Promise.resolve(false);
+    if (!active || !canManage() || cardRead) return cardRead?.promise || Promise.resolve(false);
     const read = {abort:new AbortController(),life};cardRead = read;cardsReady = false;cardsError = '';bulkEnabled();
     read.promise = (async () => {
       try {
@@ -132,19 +143,28 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
     }));
   }
   function bulkEnabled() {
-    const locked = !active || writeBusy() || !!groupView;
+    const manage = canManage(), control = controlsAllowed();
+    if (!control) clearSelection();
+    syncBulkActions();
+    const locked = !active || !control || writeBusy() || !!groupView;
     const present = [...rows.keys()].filter(id => selected.has(id)).length;
     text(find('dvbSelectedCount'),String(selected.size));
+    find('dvbBulkBar').hidden = !control;
+    selectPage.closest('label').hidden = !control;
     selectPage.disabled = locked || total === null || !rows.size;
     selectPage.checked = rows.size > 0 && present === rows.size;
     selectPage.indeterminate = present > 0 && present < rows.size;
-    for (const [id,row] of rows) {row.select.checked = selected.has(id);row.select.disabled = locked || total === null;}
+    for (const [id,row] of rows) {
+      row.select.closest('label').hidden = !control;
+      row.select.checked = selected.has(id);row.select.disabled = locked || total === null;
+    }
     cardChoices();
-    for (const key of ['Action','Group','AdapterMode','Card']) bulk[key].disabled = locked;
-    bulk.Group.closest('label').hidden = bulk.Action.value !== 'move_group';
-    bulk.AdapterMode.closest('label').hidden = bulk.Action.value !== 'assign_adapter';
-    bulk.Card.closest('label').hidden = bulk.Action.value !== 'assign_adapter' || bulk.AdapterMode.value !== 'fixed';
-    bulk.Apply.disabled = locked || !selected.size || bulk.Action.value === 'move_group' && (!groupsReady || !!bulk.Group.selectedOptions[0]?.disabled)
+    bulk.Action.disabled = locked;
+    for (const key of ['Group','AdapterMode','Card']) bulk[key].disabled = locked || !manage;
+    bulk.Group.closest('label').hidden = !manage || bulk.Action.value !== 'move_group';
+    bulk.AdapterMode.closest('label').hidden = !manage || bulk.Action.value !== 'assign_adapter';
+    bulk.Card.closest('label').hidden = !manage || bulk.Action.value !== 'assign_adapter' || bulk.AdapterMode.value !== 'fixed';
+    bulk.Apply.disabled = locked || !bulkAllowed(bulk.Action.value) || !selected.size || bulk.Action.value === 'move_group' && (!groupsReady || !!bulk.Group.selectedOptions[0]?.disabled)
       || bulk.Action.value === 'assign_adapter' && bulk.AdapterMode.value === 'fixed' && !fixedCard();
     bulk.Clear.disabled = locked || !selected.size;
     find('dvbBulkBar').setAttribute('aria-busy',String(!!bulkLock && ['confirming','writing','readback'].includes(bulkLock.phase)));
@@ -157,20 +177,19 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
     message('dvbBulkNotice',bulkText || 'Select streams on this page to apply an action.',bulkFailed);
   }
   async function edit(id) {
-    if (!active || writeBusy() || groupView || typeof openEditor !== 'function') return;
+    if (!active || !canManage() || writeBusy() || groupView || typeof openEditor !== 'function') return;
     editorOpening = true; groupEnabled();
     try {await openEditor(id);} finally {editorOpening = false;groupEnabled();}
   }
   async function scan() {
     // Its own known/unknown job may be reopened, but not over another writer.
-    if (!active || otherWriteBusy() || groupView || scanOpening || scanDialog?.open || typeof openScan !== 'function') return;
+    if (!active || !canManage() || otherWriteBusy() || groupView || scanOpening || scanDialog?.open || typeof openScan !== 'function') return;
     scanOpening = true;groupEnabled();
     try {await openScan();} finally {scanOpening = false;groupEnabled();}
   }
   async function applyBulk() {
-    if (!active || writeBusy() || groupView || !selected.size || bulk.Apply.disabled) return;
+    if (!active || !bulkAllowed(bulk.Action.value) || writeBusy() || groupView || !selected.size || bulk.Apply.disabled) return;
     const ids = [...selected], action = bulk.Action.value;
-    if (!['start','stop','restart','move_group','assign_adapter','delete'].includes(action)) return;
     const payload = {action,ids}, names = new Map(ids.map(id => [id,selectedItems.get(id)?.name || id]));
     let target = '';
     if (action === 'move_group') {payload.group_id = bulk.Group.value;target = groupName(payload.group_id);}
@@ -188,6 +207,7 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
           : `Assign adapter for ${ids.length} selected streams to ${target}? This may interrupt outputs. Requested preference is not actual placement or a guarantee of tuning.`;
         if (!await confirmAction(prompt) || !active || lock.life !== life) return;
       }
+      if (!active || lock.life !== life || !bulkAllowed(action)) return;
       lock.phase = 'writing';cancelDebounce();invalidatePage();invalidateGroups();groupEnabled();
       bulkMessage(`Applying ${action} to ${ids.length} streams. Do not repeat this request.`);
       let response, failure;
@@ -349,7 +369,7 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
     return previous !== next;
   }
   function applyEvent(event) {
-    if (active && (['dvb.card.changed','dvb.card.removed'].includes(event?.kind) && cardEventAffectsAvailability(event) || event?.kind === 'dvb.collection.changed' && event.payload?.cards === true)) {
+    if (active && canManage() && (['dvb.card.changed','dvb.card.removed'].includes(event?.kind) && cardEventAffectsAvailability(event) || event?.kind === 'dvb.collection.changed' && event.payload?.cards === true)) {
       const needed = cardsReady || !!cardRead || bulk.Action.value === 'assign_adapter';
       cardsReady = false;
       if (cardRead) cardRead.stale = true;
@@ -444,9 +464,14 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
     groupSelect.value = groupOption(query.group);
   }
   function pager() {
-    find('addDVBStreamBtn').disabled = !active || typeof openEditor !== 'function' || writeBusy() || !!groupView;
-    find('openDVBScanBtn').disabled = !active || typeof openScan !== 'function' || otherWriteBusy() || !!groupView || scanOpening || !!scanDialog?.open;
-    for (const row of rows.values()) if (row.edit) row.edit.disabled = !active || writeBusy() || !!groupView;
+    const manage = canManage();
+    find('addDVBStreamBtn').hidden = !manage;
+    find('openDVBScanBtn').hidden = !manage;
+    const primary = find('addDVBStreamBtn').closest('.dvb-primary-actions');
+    if (primary) primary.hidden = !controlsAllowed();
+    find('addDVBStreamBtn').disabled = !active || !manage || typeof openEditor !== 'function' || writeBusy() || !!groupView;
+    find('openDVBScanBtn').disabled = !active || !manage || typeof openScan !== 'function' || otherWriteBusy() || !!groupView || scanOpening || !!scanDialog?.open;
+    for (const row of rows.values()) if (row.edit) {row.edit.hidden = !manage;row.edit.disabled = !active || !manage || writeBusy() || !!groupView;}
     text(find('dvbStreamsPageInfo'), total === null ? 'Page - of -' : `Page ${query.page} of ${Math.max(1, Math.ceil(total / query.limit))} / ${total} matching streams`);
     prev.disabled = !active || searchInvalid || !!pageRead || total === null || query.page <= 1;
     next.disabled = !active || searchInvalid || !!pageRead || total === null || query.page * query.limit >= total;
@@ -455,13 +480,17 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
   }
   function groupEnabled() {
     const index = groups.findIndex(g => g.id === query.group), editable = groupsReady && index >= 0;
-    buttons.add.disabled = !active || !groupsReady || writeBusy();
-    for (const key of ['rename','delete']) buttons[key].disabled = !active || !editable || writeBusy();
-    buttons.moveUp.disabled = !active || !editable || index <= 0 || writeBusy();
-    buttons.moveDown.disabled = !active || !editable || index >= groups.length - 1 || writeBusy();
+    const manage = canManage(), actions = buttons.add.closest('.dvb-group-actions');
+    if (actions) actions.hidden = !manage;
+    for (const button of Object.values(buttons)) button.hidden = !manage;
+    buttons.add.disabled = !active || !manage || !groupsReady || writeBusy();
+    for (const key of ['rename','delete']) buttons[key].disabled = !active || !manage || !editable || writeBusy();
+    buttons.moveUp.disabled = !active || !manage || !editable || index <= 0 || writeBusy();
+    buttons.moveDown.disabled = !active || !manage || !editable || index >= groups.length - 1 || writeBusy();
     const busy = !!mutation && mutation.phase !== 'unknown';
-    find('dvbGroupSave').disabled = !active || writeBusy() || !!groupView?.saved || !groupsReady;
-    find('dvbGroupCancel').disabled = busy; name.disabled = busy || !!groupView?.saved || mutation?.phase === 'unknown';
+    find('dvbGroupSave').hidden = !manage;
+    find('dvbGroupSave').disabled = !active || !manage || writeBusy() || !!groupView?.saved || !groupsReady;
+    find('dvbGroupCancel').disabled = busy; name.disabled = !manage || busy || !!groupView?.saved || mutation?.phase === 'unknown';
     form.setAttribute('aria-busy', String(busy));
     if (active) message('dvbGroupNotice',actionText,actionFailed);
     pager();
@@ -532,6 +561,7 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
     text(row.transport, `Service ${shown(dvb.service_id)}${dvb.service?.name ? ` / ${dvb.service.name}` : ''}\n${shown(dvb.delivery_system)} / ${Number.isFinite(dvb.frequency_khz) ? dvb.frequency_khz / 1000 + ' MHz' : 'frequency unavailable'}\n${metric(dvb.symbol_rate / 1000, ' kSym/s')} / Pol ${shown(dvb.polarization)}`);
     text(row.requested, adapter.mode === 'auto' ? 'Auto' : adapter.mode === 'fixed' ? `Fixed\n${shown(adapter.device_key || adapter.last_address)}` : 'Requested card unavailable');
     text(row.output, shown(item.output_url));
+    row.outputDetails.hidden = typeof item.output_url !== 'string' || !item.output_url;
     if (row.renderedRuntime === undefined) {patchRuntime(row);nextRuntimeAt = Date.now() + 1000;}
     else queueRuntimePaint(row);
   }
@@ -541,7 +571,7 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
     const row = {tr, name:node('strong'),group:node('span',undefined,'dvb-stream-group'),transport:node('div'),requested:node('div'),actual:node('div'),output:node('code',undefined,'url-value'),status:node('div'),descrambling:node('div',undefined,'hint dvb-stream-descrambling'),metrics:node('div',undefined,'hint')};
     row.select = node('input');row.select.type = 'checkbox';
     row.select.addEventListener('change',() => {
-      if (!active || writeBusy() || groupView || total === null) {bulkEnabled();return;}
+      if (!active || !controlsAllowed() || writeBusy() || groupView || total === null) {bulkEnabled();return;}
       setSelected(item.id,row.select.checked);bulkEnabled();
     });
     const selection = node('label',undefined,'dvb-stream-select');selection.append(row.select,node('span','Select'));
@@ -560,6 +590,7 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
       }
     });
     const output = node('details',undefined,'dvb-stream-output'); output.append(node('summary','Output URL'),row.output);
+    row.outputDetails = output;
     cells[0].append(selection,row.name,row.group,toggle);cells[1].append(row.transport);cells[2].append(row.requested);cells[3].append(row.actual);cells[4].append(row.status,row.descrambling,output,row.metrics);
     if (typeof openEditor === 'function') {
       row.edit = node('button','Edit'); row.edit.type = 'button';
@@ -689,14 +720,14 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
     if (active && opener?.isConnected) opener.focus({preventScroll:true});
   }
   function openGroup(id, opener) {
-    if (!active || writeBusy() || !groupsReady) return;
+    if (!active || !canManage() || writeBusy() || !groupsReady) return;
     const group = groups.find(g => g.id === id); if (id !== null && !group) return;
     groupView = {id,opener,life,saved:false}; form.reset(); name.value = group?.name || '';
     text(find('dvbGroupDialogTitle'),group ? `Rename group: ${group.name}` : 'Create group'); message('dvbGroupError',''); groupEnabled();
     dialog.showModal(); find('dvbGroupDialogTitle').focus();
   }
   async function mutate(kind, id, payload, view = null) {
-    if (!active || writeBusy() || !groupsReady || view && (view !== groupView || view.saved)) return;
+    if (!active || !canManage() || writeBusy() || !groupsReady || view && (view !== groupView || view.saved)) return;
     const lock = {phase:'confirming',life}; mutation = lock; groupEnabled();
     const current = () => active && lock.life === life;
     try {
@@ -705,6 +736,7 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
         const accepted = await confirmAction(`Delete group "${selected?.name || id}"? Its streams move to Ungrouped; this does not delete streams.`);
         if (!accepted || !current()) return;
       }
+      if (!current() || !canManage()) return;
       lock.phase = 'writing'; cancelDebounce(); invalidatePage(); invalidateGroups(); groupEnabled();
       action('Saving group change... Do not repeat this request.');
       if (view) message('dvbGroupError','Saving... Wait for the response.');
@@ -744,6 +776,7 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
     }
   }
   function reorder(delta) {
+    if (!active || !canManage()) return;
     const index = groups.findIndex(g => g.id === query.group), target = index + delta;
     if (index < 0 || target < 0 || target >= groups.length) return;
     const ids = groups.map(g => g.id); [ids[index],ids[target]] = [ids[target],ids[index]];
@@ -766,13 +799,13 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
   find('addDVBStreamBtn').addEventListener('click', () => {void edit(null);});
   find('openDVBScanBtn').addEventListener('click', () => {void scan();});
   bulk.Apply.addEventListener('click',() => {void applyBulk();});
-  bulk.Clear.addEventListener('click',() => {if (active && !writeBusy() && !groupView) {clearSelection();bulkEnabled();}});
+  bulk.Clear.addEventListener('click',() => {if (active && controlsAllowed() && !writeBusy() && !groupView) {clearSelection();bulkEnabled();}});
   for (const key of ['Action','Group','AdapterMode','Card']) bulk[key].addEventListener('change',() => {
     bulkEnabled();
-    if (active && !writeBusy() && bulk.Action.value === 'assign_adapter' && (key === 'Action' || key === 'AdapterMode' && !cardsReady)) void loadCards();
+    if (active && canManage() && !writeBusy() && bulk.Action.value === 'assign_adapter' && (key === 'Action' || key === 'AdapterMode' && !cardsReady)) void loadCards();
   });
   selectPage.addEventListener('change',() => {
-    if (active && !writeBusy() && !groupView && total !== null) for (const id of rows.keys()) setSelected(id,selectPage.checked);
+    if (active && controlsAllowed() && !writeBusy() && !groupView && total !== null) for (const id of rows.keys()) setSelected(id,selectPage.checked);
     bulkEnabled();
   });
   editorDialog?.addEventListener('close',groupEnabled);
@@ -783,7 +816,7 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
   buttons.delete.addEventListener('click', () => {void mutate('delete',query.group);});
   buttons.moveUp.addEventListener('click', () => reorder(-1)); buttons.moveDown.addEventListener('click', () => reorder(1));
   form.addEventListener('submit', event => {
-    event.preventDefault(); if (!groupView || groupView.life !== life || !dialog.open || writeBusy() || groupView.saved) return;
+    event.preventDefault(); if (!canManage() || !groupView || groupView.life !== life || !dialog.open || writeBusy() || groupView.saved) return;
     if (!name.value.trim()) {message('dvbGroupError','Group name is required.',true);name.focus();return;}
     void mutate(groupView.id === null ? 'create' : 'rename',groupView.id,{name:name.value},groupView);
   });
@@ -793,6 +826,7 @@ export function createDVBStreamsController({requestJSON, confirmAction = message
   return {
     async activate() {
       if (!active) {active = true;++life;}
+      syncBulkActions(true);groupEnabled();
       const owner = life, boundary = epoch;
       let stored; try {stored = window.sessionStorage.getItem(storageKey);} catch { /* Optional storage. */ }
       const accepted = await adoptView(readView(window.location.hash,stored));

@@ -91,6 +91,8 @@ func (s *Server) registerRoutes(webAssets fs.FS) {
 	s.mux.HandleFunc("/api/v1/dvb-scans/", s.handleDVBScans)
 	s.mux.HandleFunc("/api/v1/version", s.handleVersion)
 	s.mux.HandleFunc("/api/v1/status", s.handleStatus)
+	s.mux.HandleFunc("/api/v1/users", s.handleUsers)
+	s.mux.HandleFunc("/api/v1/users/", s.handleUsers)
 	s.mux.HandleFunc("/api/v1/streams", s.handleStreams)
 	s.mux.HandleFunc("/api/v1/streams/", s.handleStreamByID)
 	s.mux.HandleFunc("/api/v1/softcams", s.handleSoftcams)

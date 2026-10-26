@@ -48,7 +48,10 @@ extract_payload() {
             ln -s libastrax_srt.so.1.4.0 "$destination/$name"
         else
             tar -xOzf "$archive" "$name" > "$destination/$name" || return 1
-            if [ "$name" = astrax ]; then chmod 755 "$destination/$name"; else chmod 644 "$destination/$name"; fi
+            case "$name" in
+                astrax|astrax-dvb-owners|dvb-owner-helper) chmod 755 "$destination/$name" ;;
+                *) chmod 644 "$destination/$name" ;;
+            esac
         fi
     done
 }
@@ -95,7 +98,7 @@ case $mode in
         printf '%s' "$ASTRAX_SYSTEMD_TEMPLATE" > "$work/init/systemd.in"
         printf '%s' "$ASTRAX_OPENRC_TEMPLATE" > "$work/init/openrc.in"
         printf '%s' "$ASTRAX_SYSV_TEMPLATE" > "$work/init/sysv.in"
-        ASTRAX_RELEASE_TARGET="$ASTRAX_RELEASE_TARGET" ASTRAX_TEMPLATE_DIR="$work/init" sh "$work/installer_core.sh" "$mode" "$work/release"
+        ASTRAX_PRIVATE_INSTALL_QA="$ASTRAX_PRIVATE_INSTALL_QA" ASTRAX_RELEASE_TARGET="$ASTRAX_RELEASE_TARGET" ASTRAX_TEMPLATE_DIR="$work/init" sh "$work/installer_core.sh" "$mode" "$work/release"
         exit $? ;;
 esac
 

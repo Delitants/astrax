@@ -112,7 +112,7 @@ func TestAuthStateRestartAfterEnrollmentBeforeSetupRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 	enrolled := authState{
-		Version:      stateVersion,
+		Version:      1,
 		Phase:        "enrolled",
 		PasswordSalt: encode(salt),
 		PasswordHash: encode(hashSecret(testPassword, salt)),

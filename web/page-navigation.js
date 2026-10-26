@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) Delitants
 
-export function createPageNavigation({nav, panels, controllers = {}, onError, onChange, window: win = globalThis.window}) {
+export function createPageNavigation({nav, panels, controllers = {}, onError, onChange, canAccess = () => true, window: win = globalThis.window}) {
   const pages = new Map(Array.from(panels, (panel) => [panel.dataset.panel, panel]));
   const remembered = new Map();
   let running = false;
@@ -34,9 +34,10 @@ export function createPageNavigation({nav, panels, controllers = {}, onError, on
     const split = raw.indexOf("?");
     const requested = split < 0 ? raw : raw.slice(0, split);
     const aliased = requested === "adapters" ? "dvb-cards" : requested;
-    const name = pages.has(aliased) ? aliased : "overview";
-    let canonical = name + (pages.has(aliased) && split >= 0 ? raw.slice(split) : "");
-    if (restore && split < 0 && pages.has(aliased)) canonical = remembered.get(name) || name;
+    const allowed = pages.has(aliased) && canAccess(aliased);
+    const name = allowed ? aliased : "overview";
+    let canonical = name + (allowed && split >= 0 ? raw.slice(split) : "");
+    if (restore && split < 0 && allowed) canonical = remembered.get(name) || name;
     if (win.location.hash !== `#${canonical}`) win.history.replaceState(null, "", `#${canonical}`);
     if (active?.fragment === canonical) return;
 

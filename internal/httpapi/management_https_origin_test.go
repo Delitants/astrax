@@ -88,7 +88,7 @@ func TestManagementCanonicalIPv6BrowserOrigin(t *testing.T) {
 				return r.WithContext(context.WithValue(r.Context(), http.LocalAddrContextKey, &net.TCPAddr{IP: net.ParseIP("::1"), Port: port}))
 			}
 			login := request("/api/v1/auth/login", "[::1]:"+tc.port, origin)
-			login.Body = io.NopCloser(strings.NewReader(`{"password":"` + testAdminPassword + `"}`))
+			login.Body = io.NopCloser(strings.NewReader(`{"username":"admin","password":"` + testAdminPassword + `"}`))
 			login.Header.Set("Content-Type", "application/json")
 			if got := serveManagement(s, login); got.Code != http.StatusOK {
 				t.Fatalf("canonical listener login = %d %s", got.Code, got.Body.String())
@@ -133,7 +133,7 @@ func TestManagementHTTPSCertifiedDNSLoginAndMutation(t *testing.T) {
 	for _, sans := range [][]string{{"192.0.2.10", "astrax.example"}, {"astrax.example"}} {
 		s, token, csrf := httpsManagementFixture(t, sans)
 		login := httpsManagementRequest(http.MethodPost, "/api/v1/auth/login", "astrax.example:8443", "astrax.example", "https://astrax.example:8443")
-		login.Body = io.NopCloser(strings.NewReader(`{"password":"` + testAdminPassword + `"}`))
+		login.Body = io.NopCloser(strings.NewReader(`{"username":"admin","password":"` + testAdminPassword + `"}`))
 		login.Header.Set("Content-Type", "application/json")
 		if got := serveManagement(s, login); got.Code != http.StatusOK || len(got.Result().Cookies()) != 1 || !got.Result().Cookies()[0].Secure {
 			t.Fatalf("DNS login with SANs %v: %d %s", sans, got.Code, got.Body.String())
@@ -211,7 +211,7 @@ func TestManagementHTTPSIPAndLoopbackHTTPBrowserIdentity(t *testing.T) {
 	if got := serveManagement(s, ip); got.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("certified IP mutation = %d", got.Code)
 	}
-	local := rawManagementRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"password":"`+testAdminPassword+`"}`))
+	local := rawManagementRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"`+testAdminPassword+`"}`))
 	local.Host = "localhost:8080"
 	local.Header.Set("Origin", "http://localhost:8080")
 	local.Header.Set("Content-Type", "application/json")
@@ -226,7 +226,7 @@ func TestManagementHTTPSIPAndLoopbackHTTPBrowserIdentity(t *testing.T) {
 	if got := serveManagement(s, localMutation); got.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("localhost loopback HTTP mutation = %d", got.Code)
 	}
-	forged := rawManagementRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"password":"`+testAdminPassword+`"}`))
+	forged := rawManagementRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"`+testAdminPassword+`"}`))
 	forged.Host = "astrax.example:8080"
 	forged.Header.Set("Origin", "http://astrax.example:8080")
 	forged.Header.Set("Content-Type", "application/json")
@@ -239,7 +239,7 @@ func TestManagementHTTPSLocalhostLoopbackName(t *testing.T) {
 	s, _, _ := httpsManagementFixture(t, []string{"localhost"})
 	r := httpsManagementRequest(http.MethodPost, "/api/v1/auth/login", "localhost:8443", "localhost", "https://localhost:8443")
 	r = r.WithContext(context.WithValue(r.Context(), http.LocalAddrContextKey, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8443}))
-	r.Body = io.NopCloser(strings.NewReader(`{"password":"` + testAdminPassword + `"}`))
+	r.Body = io.NopCloser(strings.NewReader(`{"username":"admin","password":"` + testAdminPassword + `"}`))
 	r.Header.Set("Content-Type", "application/json")
 	if got := serveManagement(s, r); got.Code != http.StatusOK {
 		t.Fatalf("localhost HTTPS login = %d %s", got.Code, got.Body.String())

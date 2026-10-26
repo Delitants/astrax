@@ -55,7 +55,7 @@ function signalText(signal) {
     `BER ${shown(signal.ber)}`, `UNC ${shown(signal.uncorrected_blocks)}`].join("\n");
 }
 
-export function createDVBCardsController({ requestJSON, root = document, window = globalThis.window, confirmAction = message => window.confirm(message) }) {
+export function createDVBCardsController({ requestJSON, root = document, window = globalThis.window, confirmAction = message => window.confirm(message), canManage = () => true }) {
   const doc = root.ownerDocument || root;
   const find = id => root.querySelector(`#${id}`);
   const body = find("dvbCardsTableBody");
@@ -86,7 +86,8 @@ export function createDVBCardsController({ requestJSON, root = document, window 
   const ownershipFields = ['application','current_transport','active_sessions','active_streams','signal','last_error'];
   const nullableObject = value => value === null || object(value);
   const validOwnership = value => object(value) && ['application','current_transport','signal'].every(key => nullableObject(value[key]))
-    && ['active_sessions','active_streams'].every(key => Number.isSafeInteger(value[key]) && value[key] >= 0) && typeof value.last_error === 'string';
+    && ['active_sessions','active_streams'].every(key => Number.isSafeInteger(value[key]) && value[key] >= 0)
+    && (value.last_error === undefined || typeof value.last_error === 'string');
   // HTTP retains diagnostics; SSE projects nonempty errors to "card unavailable".
   const ownershipKey = value => JSON.stringify([value?.active_sessions > 0,value?.active_streams > 0,!!value?.current_transport,!!value?.last_error]);
   const mergeEvent = (card,event) => event.payload.mode === 'replace' ? event.payload.resource
@@ -128,9 +129,10 @@ export function createDVBCardsController({ requestJSON, root = document, window 
   function settingsEnabled() {
     const view = settingsView;
     const locked = view && saveLocks.get(view.id);
-    const enabled = active && view?.loaded && !view.saved && !locked;
+    const enabled = active && canManage() && view?.loaded && !view.saved && !locked;
     settingsForm.querySelectorAll("fieldset").forEach(el => {el.disabled = !enabled;});
     settingsSave.disabled = !enabled;
+    settingsSave.hidden = !canManage();
     settingsClose.disabled = !!view?.saving;
   }
 
@@ -188,7 +190,7 @@ export function createDVBCardsController({ requestJSON, root = document, window 
   }
 
   async function openSettings(id, opener) {
-    if (!active || settingsView?.saving) return;
+    if (!active || !canManage() || settingsView?.saving) return;
     closeSettings();
     const view = {id, life, opener, abort: new AbortController(), loaded: false}; settingsView = view;
     settingsForm.reset(); settingsEnabled();
@@ -199,6 +201,7 @@ export function createDVBCardsController({ requestJSON, root = document, window 
     try {
       const card = await requestJSON(cardPath(id), {signal: view.abort.signal});
       if (!settingsCurrent(view)) return;
+      if (!canManage()) return;
       if (card?.id !== id) throw new Error("Card settings identity mismatch");
       hydrate(card); view.config = card.config; view.loaded = true;
       setText(find("cardSettingsDialogTitle"), `Card settings - ${cardLabel(card)}`);
@@ -249,7 +252,7 @@ export function createDVBCardsController({ requestJSON, root = document, window 
   async function saveSettings(event) {
     event.preventDefault();
     const view = settingsView;
-    if (!view || !settingsCurrent(view) || !view.loaded || view.saved || saveLocks.has(view.id)) return;
+    if (!canManage() || !view || !settingsCurrent(view) || !view.loaded || view.saved || saveLocks.has(view.id)) return;
     let payload;
     try {payload = settingsPayload(view.config);} catch (reason) {message(settingsNotice, reason.message, true); focusSetting(reason.field); return;}
     const lock = {state: "pending", abort: new AbortController()}; saveLocks.set(view.id, lock);
@@ -303,12 +306,17 @@ export function createDVBCardsController({ requestJSON, root = document, window 
   function syncActions(row) {
     const record = operations.get(row.card?.id);
     const blocked = restartBlock(row.card);
-    row.settings.disabled = !active;
-    row.restart.disabled = !active || !!blocked || !!restartPending(record);
+    const manage = canManage();
+    row.settings.hidden = !manage;
+    row.settings.disabled = !active || !manage;
+    row.restart.hidden = !manage;
+    row.restart.disabled = !active || !manage || !!blocked || !!restartPending(record);
+    row.restartSection.hidden = !manage && !record;
     row.restart.title = blocked || (restartPending(record) ? "A restart is pending or its outcome is unknown; use Restart progress" : `Restart this card. ${sharedRFWarning}`);
     row.progress.hidden = !record || ["confirming", "checking"].includes(record.phase);
     row.progress.disabled = !active;
-    setText(row.hint, blocked || (record ? "Use Restart progress for the latest known outcome." : `Restart interrupts this card's streams. ${sharedRFWarning}`));
+    setText(row.hint, !manage ? record ? "Use Restart progress for the latest known outcome." : ""
+      : blocked || (record ? "Use Restart progress for the latest known outcome." : `Restart interrupts this card's streams. ${sharedRFWarning}`));
   }
 
   function stopPoll(record) {
@@ -377,7 +385,7 @@ export function createDVBCardsController({ requestJSON, root = document, window 
 
   async function restartCard(id, opener) {
     const row = rows.get(id), existing = operations.get(id);
-    if (!active || !row || restartBlock(row.card) || restartPending(existing)) return;
+    if (!active || !canManage() || !row || restartBlock(row.card) || restartPending(existing)) return;
     const card = row.card, lifecycle = life;
     const record = {cardID: id, label: cardLabel(card), phase: "confirming", version: 0, revision: 0, error: ""};
     operations.set(id, record); syncActions(row);
@@ -385,10 +393,11 @@ export function createDVBCardsController({ requestJSON, root = document, window 
     try {
       const confirmed = await confirmAction(`Restart ${record.label}? This interrupts ${card.active_streams} attached streams on this card. Other cards are not restarted by AstraX. ${sharedRFWarning}`);
       if (!current()) return;
-      if (!confirmed) {operations.delete(id); return;}
+      if (!confirmed || !canManage()) {operations.delete(id); return;}
       record.phase = "checking"; record.actionAbort = new AbortController();
       const latest = await requestJSON(cardPath(id), {signal: record.actionAbort.signal});
       if (!current()) return;
+      if (!canManage()) {operations.delete(id); return;}
       const blocked = rows.get(id) !== row || latest?.id !== id ? "Card identity changed"
         : restartBlock(row.card) || restartBlock(latest);
       if (blocked || latest.active_streams !== card.active_streams || row.card.active_streams !== card.active_streams) throw new Error(blocked || "Attached stream count changed. Review the card and confirm again.");
@@ -443,6 +452,7 @@ export function createDVBCardsController({ requestJSON, root = document, window 
     controls.q.value = query.q;
     controls.sort.value = query.sort;
     Object.values(controls).forEach(control => { if (control) control.disabled = !active; });
+    setText(refreshButton, canManage() ? "Refresh" : "Refresh view");
     refreshButton.disabled = !active || refreshPending;
     const pages = total === null ? null : Math.max(1, Math.ceil(total / query.limit));
     if (prev) prev.disabled = !active || pages === null || query.page <= 1;
@@ -456,7 +466,8 @@ export function createDVBCardsController({ requestJSON, root = document, window 
     const timestamp = page?.refreshed_at;
     const validTime = typeof timestamp === "string" && !timestamp.startsWith("0001-") && Number.isFinite(Date.parse(timestamp));
     const timing = validTime ? `Last refreshed: ${timestamp}.` : "Inventory never read (no refresh time).";
-    const result = refreshPending ? "Refreshing hardware inventory..." : stale ? "Stale inventory." : refreshSuccess ? "Refresh successful." : "";
+    const result = refreshPending ? canManage() ? "Refreshing hardware inventory..." : "Refreshing cached inventory view..."
+      : stale ? "Stale inventory." : refreshSuccess ? "Refresh successful." : "";
     setText(notice, `${result} ${timing} ${liveState === 'live' ? dirty || request ? 'Syncing card status; latest completed inventory snapshot shown.' : 'Live updates connected.' : `${liveState}; snapshot is not live. ${snapshotLabel}`} ${liveReason}`.trim());
     notice.hidden = false;
     notice.className = `notice ${stale ? "err" : ""}`.trim();
@@ -497,7 +508,7 @@ export function createDVBCardsController({ requestJSON, root = document, window 
     }
     const hint = node("small", "", "hint"); hint.id = `${detail.id}-actions`;
     restartSection.insertBefore(hint, actions.restart);
-    return {main, detail, cells, parts, list, restartTitle, fields: new Map(), card: null, hint, ...actions};
+    return {main, detail, cells, parts, list, restartTitle, restartSection, fields: new Map(), card: null, hint, ...actions};
   }
 
   function patchRow(row, card) {
@@ -622,7 +633,7 @@ export function createDVBCardsController({ requestJSON, root = document, window 
     const abort = new AbortController(); refreshRequest = abort;
     syncControls(); feedback();
     try {
-      await requestJSON("/api/v1/dvb-cards/refresh", {method: "POST", signal: abort.signal});
+      if (canManage()) await requestJSON("/api/v1/dvb-cards/refresh", {method: "POST", signal: abort.signal});
       if (!active || token !== refreshToken || life !== lifecycle) return;
       localFailure = "";
       const page = await resync();
@@ -646,9 +657,11 @@ export function createDVBCardsController({ requestJSON, root = document, window 
   }
 
   function activate() {
-    if (active) return pendingLoad || Promise.resolve();
-    active = true; life++; query = readQuery(window.location.hash);
-    syncControls(); feedback();
+    const wasActive = active;
+    if (!active) {active = true; life++; query = readQuery(window.location.hash);}
+    syncControls(); feedback(); settingsEnabled();
+    for (const row of rows.values()) syncActions(row);
+    if (wasActive) return pendingLoad || Promise.resolve();
     listen(controls.q, "input", () => changed("q", controls.q.value, 250));
     for (const key of ["delivery_system", "model", "status", "sort", "limit"]) listen(controls[key], "change", () => changed(key, controls[key].value));
     listen(refreshButton, "click", () => { void refresh(); });

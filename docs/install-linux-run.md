@@ -4,7 +4,8 @@ The installer is being prepared for a separately qualified Linux amd64
 release. It is not a deployment or a live DVB/softcam acceptance result.
 
 Build input is a finalized release directory containing `STATUS.json`,
-`MANIFEST.json`, `astrax`, `lib/libastrax_srt.so.1` pointing to its pinned
+`MANIFEST.json`, `astrax`, `astrax-dvb-owners`, `dvb-owner-helper`,
+`lib/libastrax_srt.so.1` pointing to its pinned
 versioned library, and nonempty `share/notices/` and `share/source/` trees.
 Every regular file must appear in the manifest with its SHA-256, size and mode.
 The builder refuses a release unless `distribution_cleared`,
@@ -17,12 +18,30 @@ inputs in `packaging/build_run.py`. This is an identity/inventory gate, not a le
 opinion about the sufficiency of the final notices. It also refuses draft
 files and the old `bin/astrax` layout,
 which breaks this executable's `$ORIGIN/lib` lookup.
+New `.run` bundles also require `owner_helper_sha256` in their reviewed
+identity. The root payload launcher must match the pinned
+`share/build/dvb-owner-helper.sh` source. Older helper-free identities can
+still be validated, but cannot be used to build a new `.run`.
 
-The current Stage C draft is intentionally held and cannot be packaged for
-distribution. No host installation is authorized by this document.
+The current candidate is intentionally held and cannot be packaged for
+distribution. Private `PRIVATE-INSTALL-QA` bundles retain the publication and
+distribution holds, require an explicit private-install acknowledgement, and
+cannot activate a service. No host installation is authorized by this document.
+
+An explicit `HELD-CANDIDATE.run` preparation mode produces a locally held,
+activatable candidate without clearing distribution or publication. Its layout
+requires `held_candidate=true`, `private_install_qa=false`, both clearance flags
+false, candidate qualification and complete source/notice inventories. It keeps
+the normal target checks and install/activate commands, is written with mode
+0600, and cannot enter the default public-release builder. QA modes cannot be
+combined with this mode. Use `build_held_candidate_run` with the reviewed identity
+instead of `build_run` for this preparation step. A held filename and checksum
+are not permission to distribute, install or activate it. If separately
+authorized on a suitable Linux host, invoke its commands through `sh` while its
+file mode remains 0600; do not change permissions merely to bypass the hold.
 
 On a supported host, `--install` creates a dedicated service account, places
-the executable and its SRT library under `/opt/astrax/`, reserves
+the executable, SRT library and DVB ownership helper under `/opt/astrax/`, reserves
 `/var/lib/astrax/` for the GUI-managed configuration, and writes one startup
 definition for the detected init system. It neither enables nor starts the
 service, and it refuses an existing installation instead of replacing it.
@@ -61,6 +80,7 @@ The installer needs Linux x86-64, glibc 2.38 or newer, a C++ runtime with
 and other system libraries. It checks these before writing persistent files.
 Alpine/musl and other CPU architectures are not supported. No dependency
 is downloaded or installed automatically.
+The host must already provide `/usr/bin/sudo` and `/usr/sbin/visudo`.
 
 ## Install and activate
 
@@ -77,8 +97,12 @@ private tunnel such as `ssh -L 8080:127.0.0.1:8080 USER@HOST`, then open
 `http://127.0.0.1:8080`. On first start, AstraX creates an owner-only,
 one-time setup file at `/var/lib/astrax/astrax-config.json.admin-setup`.
 Read that file locally as root and enter its secret in the setup page to
-enroll an administrator password; the installer prints the path, never the
-secret. The setup file is removed after enrollment. Do not treat an external
+set the password for the named initial administrator, `admin`; there is no
+default password. Sign in with your username and password. Administrators
+manage individual users and Administrator, Operator and Viewer roles in
+**Users**; keep at least one enabled Administrator. The installer prints
+the setup path, never the secret. The setup file is removed after enrollment.
+Do not treat an external
 API token as management authentication. The installer does not change the
 firewall or make the management UI available on the LAN. To enable HTTPS,
 configure a concrete listener IP and a certificate valid for the intended
@@ -95,18 +119,33 @@ HTTP play port to HTTPS; playback TLS is not enabled by this installer.
 Systemd uses `/etc/systemd/system/astrax.service`. OpenRC and SysV templates
 remain in source for future qualification, but are not supported by the first
 distributable `.run`. The service
-account joins an existing `video` group when created; other DVB device ACLs
-must be configured separately. `--install` never opens DVB devices.
+account remains non-root and joins an existing `video` group when created.
+An existing account without that group, or a host without a `video` group,
+produces a warning: arrange the required DVB group/ACL access before use.
+Other device ACLs must be configured separately. `--install` never opens DVB
+devices or invokes the ownership helper.
+
+The read-only ownership reader and its no-argument launcher are root-owned
+0755 files. Only the reader runs as root, via the fixed command
+`/usr/bin/sudo -n -- /opt/astrax/astrax-dvb-owners`. The root-owned 0440
+`/etc/sudoers.d/astrax-dvb-owners` policy permits account `astrax` to run
+only that exact SHA-256-pinned reader with empty arguments and no `SETENV`.
+It grants no shell, process-control or service-control privilege. `visudo`
+must accept the staged policy before it is published. Activation rechecks
+the installed application, library, reader, launcher, policy and unit,
+including ownership/modes and policy syntax, before any enable/start command.
 
 ## Recovery
 
 This version supports clean installs only. It refuses an existing AstraX
-runtime, state directory or service instead of overwriting it. On a failed
+runtime (including helper paths), state directory, service or ownership
+sudoers policy instead of overwriting it. On a failed
 fresh installation it removes only new files/account entries it created.
 There is no automatic upgrade, migration or uninstall. If removal is needed,
 first stop and disable the service using the host's init tool, save
 `/var/lib/astrax/` and any custom service edits, and only then remove the
-service definition and `/opt/astrax/` manually. Do not delete the state
+service definition, this installation's ownership sudoers policy and
+`/opt/astrax/` manually. Do not remove unrelated sudoers rules. Do not delete the state
 directory as part of a generic cleanup. A failed `--activate` reports the
 error and undoes only newly added enablement; it leaves the installation
 available for inspection.

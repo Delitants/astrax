@@ -73,14 +73,28 @@ def _hash_file(path: Path) -> str:
 
 def validate_release(
     release_dir: Path, *, identity: dict | None = None,
-    qa_only: bool = False, private_install_qa: bool = False,
+    qa_only: bool = False, private_install_qa: bool = False, held_candidate: bool = False,
 ) -> dict:
     release_dir = Path(release_dir)
     identity = APPROVED_IDENTITY if identity is None else identity
     status = json.loads((release_dir / "STATUS.json").read_text())
-    if qa_only and private_install_qa:
-        raise ValueError("QA modes are mutually exclusive")
-    if qa_only:
+    if sum(bool(mode) for mode in (qa_only, private_install_qa, held_candidate)) > 1:
+        raise ValueError("build modes are mutually exclusive")
+    if not held_candidate and status.get("held_candidate", False) is not False:
+        raise ValueError("held_candidate layout requires the explicit held-candidate mode")
+    if held_candidate:
+        for field in ("distribution_cleared", "publication_cleared", "production_or_dvb_access", "private_install_qa"):
+            if status.get(field) is not False:
+                raise ValueError(f"held candidate requires {field}=false")
+        for field in ("held_candidate", "candidate_qualified"):
+            if status.get(field) is not True:
+                raise ValueError(f"{field} must be true")
+        for field in ("source_closure", "notice_closure"):
+            if status.get(field) != "complete":
+                raise ValueError(f"{field} must be complete")
+        if status.get("target_profile") != identity["target_profile"]:
+            raise ValueError("held candidate target_profile mismatch")
+    elif qa_only:
         if status.get("distribution_cleared") is not False:
             raise ValueError("QA-only input requires distribution_cleared=false")
     elif private_install_qa:
@@ -148,6 +162,12 @@ def validate_release(
         (identity["source_path"], "source_sha256", "approved source archive"),
     )
     by_name = {entry["path"]: entry["sha256"] for entry in entries}
+    if "owner_helper_sha256" in identity or "astrax-dvb-owners" in names:
+        helper_pin = identity.get("owner_helper_sha256")
+        if not isinstance(helper_pin, str) or not re.fullmatch(r"[0-9a-f]{64}", helper_pin):
+            raise ValueError("DVB ownership helper SHA-256 identity required")
+        if by_name.get("astrax-dvb-owners") != helper_pin:
+            raise ValueError("approved DVB ownership helper hash mismatch or helper missing")
     for path, field, label in pinned:
         if by_name.get(path) != identity[field]:
             raise ValueError(f"{label} hash mismatch")
@@ -184,10 +204,11 @@ def validate_release(
 
 def build_payload(
     release_dir: Path, output: Path, *, identity: dict | None = None,
-    qa_only: bool = False, private_install_qa: bool = False,
+    qa_only: bool = False, private_install_qa: bool = False, held_candidate: bool = False,
 ) -> Path:
     release_dir, output = Path(release_dir), Path(output)
-    manifest = validate_release(release_dir, identity=identity, qa_only=qa_only, private_install_qa=private_install_qa)
+    manifest = validate_release(release_dir, identity=identity, qa_only=qa_only,
+                                private_install_qa=private_install_qa, held_candidate=held_candidate)
     members = sorted(["MANIFEST.json", SONAME] + [entry["path"] for entry in manifest["files"]])
     output.parent.mkdir(parents=True, exist_ok=True)
     fd, staged = tempfile.mkstemp(prefix=f".{output.name}.", dir=output.parent)
@@ -224,15 +245,20 @@ def build_payload(
 
 def _build_run(
     release_dir: Path, output: Path, *, identity: dict | None,
-    qa_only: bool, private_install_qa: bool = False,
+    qa_only: bool, private_install_qa: bool = False, held_candidate: bool = False,
 ) -> Path:
     release_dir, output = Path(release_dir), Path(output)
+    identity = APPROVED_IDENTITY if identity is None else identity
+    if "owner_helper_sha256" not in identity:
+        raise ValueError("new bundles require a pinned DVB ownership helper identity")
     if qa_only and ("QA-ONLY" not in output.name or not output.name.endswith(".run")):
         raise ValueError("QA-only output name must contain QA-ONLY and end in .run")
     if private_install_qa and ("PRIVATE-INSTALL-QA" not in output.name or not output.name.endswith(".run")):
         raise ValueError("private install QA output name must contain PRIVATE-INSTALL-QA and end in .run")
-    manifest = validate_release(release_dir, identity=identity, qa_only=qa_only, private_install_qa=private_install_qa)
-    identity = APPROVED_IDENTITY if identity is None else identity
+    if held_candidate and ("HELD-CANDIDATE" not in output.name or not output.name.endswith(".run")):
+        raise ValueError("held candidate output name must contain HELD-CANDIDATE and end in .run")
+    manifest = validate_release(release_dir, identity=identity, qa_only=qa_only,
+                                private_install_qa=private_install_qa, held_candidate=held_candidate)
 
     def pinned_source(name: str) -> str:
         expected = identity["required_source_sha256"].get(name)
@@ -254,11 +280,15 @@ def _build_run(
     header = pinned_source(f"share/build/{header_name}")
     if not qa_only:
         core = pinned_source("share/build/installer_core.sh")
+        launcher = pinned_source("share/build/dvb-owner-helper.sh")
+        if (release_dir / "dvb-owner-helper").read_bytes() != launcher.encode("utf-8"):
+            raise ValueError("DVB ownership launcher does not match its pinned source")
         templates = {init: pinned_source(f"share/build/init/{init}.in") for init in ("systemd", "openrc", "sysv")}
     with tempfile.TemporaryDirectory(dir=output.parent) as scratch:
         payload = build_payload(
             release_dir, Path(scratch) / "payload.tar.gz", identity=identity,
             qa_only=qa_only, private_install_qa=private_install_qa,
+            held_candidate=held_candidate,
         )
         digest = _hash_file(payload)
         header = header.replace("@PAYLOAD_SHA@", digest).replace("@MEMBERS@", "\n".join(members))
@@ -275,7 +305,7 @@ def _build_run(
             with os.fdopen(fd, "wb") as stream, payload.open("rb") as source:
                 stream.write(header.encode())
                 shutil.copyfileobj(source, stream)
-            os.chmod(staged, 0o644 if qa_only else 0o600 if private_install_qa else 0o755)
+            os.chmod(staged, 0o644 if qa_only else 0o600 if private_install_qa or held_candidate else 0o755)
             os.replace(staged, output)
         finally:
             if os.path.exists(staged):
@@ -295,6 +325,10 @@ def build_private_install_qa_run(release_dir: Path, output: Path, *, identity: d
     return _build_run(release_dir, output, identity=identity, qa_only=False, private_install_qa=True)
 
 
+def build_held_candidate_run(release_dir: Path, output: Path, *, identity: dict | None = None) -> Path:
+    return _build_run(release_dir, output, identity=identity, qa_only=False, held_candidate=True)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build the offline AstraX Linux installer")
     parser.add_argument("--release-dir", required=True, type=Path)
@@ -302,9 +336,11 @@ if __name__ == "__main__":
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--qa-extract-only", action="store_true", help="build a non-installing QA verify/extract package")
     modes.add_argument("--private-install-qa", action="store_true", help="build a private install-QA package, never for distribution")
+    modes.add_argument("--held-candidate", action="store_true", help="build an activatable mode-0600 candidate; publication remains held")
     args = parser.parse_args()
     try:
-        builder = build_qa_run if args.qa_extract_only else build_private_install_qa_run if args.private_install_qa else build_run
+        builder = (build_qa_run if args.qa_extract_only else build_private_install_qa_run if args.private_install_qa
+                   else build_held_candidate_run if args.held_candidate else build_run)
         print(builder(args.release_dir, args.output))
     except (OSError, ValueError) as exc:
         parser.exit(1, f"release refused: {exc}\n")

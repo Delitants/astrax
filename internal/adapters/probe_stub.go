@@ -18,6 +18,10 @@ func linuxDVBCards(ctx context.Context) ([]model.DVBCard, error) {
 	return []model.DVBCard{}, nil
 }
 
+func linuxDVBCardsWithHelper(ctx context.Context, _ string) ([]model.DVBCard, error) {
+	return linuxDVBCards(ctx)
+}
+
 func linuxDVBAdapters() []model.Adapter {
 	return nil
 }

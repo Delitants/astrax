@@ -19,10 +19,11 @@ import tarfile
 import zipfile
 
 
-SOURCE_COMMIT = "3e3b81102b01cb751b2e6d1cf64f6ffe00fa4f9e"
-MANIFEST_SHA256 = "49c3d2f00e3f5f583f620368673a0bb3c106d4c865f2a5fbbeb4af2eb42c8ae4"
+# The archive is a source snapshot; the commit identifies its base, not its bytes.
+SOURCE_COMMIT = "9f0459fa0b01f827cf98c80aafb52d0479f1ac4d"
+MANIFEST_SHA256 = "955ba68b5579ee587a93b6175691ec56fbb98d858e47e58d58c15df274857ab8"
 PINS = {
-    "source/astrax-3e3b81102b01-source.tar.gz": "4d682f1264c279bad5c1f1eadd8a324347e5f5afafc69b09d26a21bb8a42c656",
+    "source/astrax-accounts-20261024-source.tar.gz": "a22cbe4683c5c44c9ba4eee57c4fc5b8e7800b2a98718e234e4b8459417792aa",
     "source/srt_1.4.0.orig.tar.gz": "c2ba0bb9382ab42f9eebac831dc021e7da26b2971aaeb30a891dd24297bd929c",
     "source/srt_1.4.0-1build1.debian.tar.xz": "849199cd57d93ca8fecc2b0ef26f89d4b9e341ce74262ed09acaf72c9471957e",
     "source/srt_1.4.0-1build1.dsc": "873634cd5ef1cd25e68bf54e14b7b548cf48050b5796f6d9eed24d9ed08530e2",
@@ -32,7 +33,7 @@ PINS = {
     "source/golang.org_x_text_v0.41.0.zip": "e63f35daaae749d0ffff97a295ad8f4837a662938a46b7a87f18a88e85a5cbf9",
     "patches/guard.patch": "7cd257cbba314c52ba471b07519c10a2d49353e5a1a80cee5f99971a7a2a73cc",
 }
-SOURCE_ARCHIVE = "source/astrax-3e3b81102b01-source.tar.gz"
+SOURCE_ARCHIVE = "source/astrax-accounts-20261024-source.tar.gz"
 CONGCTL_ORIGINAL_SHA256 = "bebbabadb6c1b8c96dc02d96d6185159afedd2d3bff1208382c51375f1ed5033"
 CONGCTL_GUARDED_SHA256 = "c40fd0f7e0e1fd39486b77fd561f0d470e3e875b14af2acf9e53683a3ec09481"
 AUTH_MODULE_PINS = {
@@ -240,6 +241,25 @@ def _run(command, *, cwd, env, logs, name, input_text=None):
     if result.returncode:
         raise SourceBuildError(f"{name} failed with exit status {result.returncode}")
     return result.stdout.strip()
+
+
+def build_owner_helper(go, source, candidate, env, logs):
+    helper = candidate / "astrax-dvb-owners"
+    helper_env = {**env, "CGO_ENABLED": "0"}
+    _run([go, "build", "-trimpath", "-buildvcs=false", "-o", str(helper),
+          "./cmd/astrax-dvb-owners"], cwd=source, env=helper_env, logs=logs,
+         name="owner-helper-build")
+    if not _regular(helper):
+        raise SourceBuildError("DVB ownership helper missing")
+    headers = _run(["readelf", "-l", str(helper)], cwd=source, env=helper_env,
+                   logs=logs, name="owner-helper-program-headers")
+    info = _run([go, "version", "-m", str(helper)], cwd=source, env=helper_env,
+                logs=logs, name="owner-helper-build-info")
+    if (re.search(r"\b(?:INTERP|DYNAMIC)\b", headers)
+            or "go1.26.9" not in info
+            or any(value not in info for value in ("CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64"))):
+        raise SourceBuildError("DVB ownership helper must be static Linux amd64")
+    return _sha256(helper)
 
 
 def _check_isolated_host(*, netdev=Path("/proc/net/dev"),
@@ -456,6 +476,7 @@ def build(stage, output, *, recipient=False, manifest_sha=MANIFEST_SHA256, pins=
          name="go-build")
     if not _regular(executable):
         raise SourceBuildError("AstraX executable missing")
+    helper_sha256 = build_owner_helper(go, source, candidate, go_env, logs)
     shutil.copyfile(srt_library, candidate / "lib/libastrax_srt.so.1.4.0")
     (candidate / "lib/libastrax_srt.so.1").symlink_to("libastrax_srt.so.1.4.0")
     build_info = _run([go, "version", "-m", str(executable)], cwd=output,
@@ -481,8 +502,11 @@ def build(stage, output, *, recipient=False, manifest_sha=MANIFEST_SHA256, pins=
     result = {
         **build_status(recipient=recipient, in_progress=False),
         "source_commit_content_reference": SOURCE_COMMIT,
+        "source_state": manifest.get("source_state"),
+        "source_archive_sha256": pins[SOURCE_ARCHIVE],
         "source_stage_manifest_sha256": manifest_sha,
         "executable_sha256": _sha256(executable),
+        "owner_helper_sha256": helper_sha256,
         "private_srt_sha256": _sha256(candidate / "lib/libastrax_srt.so.1.4.0"),
     }
     (output / "STATUS.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")

@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"astrax/internal/adapters"
 	"astrax/internal/adminauth"
 	"astrax/internal/cert"
 	"astrax/internal/httpapi"
@@ -33,7 +34,11 @@ func main() {
 	httpsListen := flag.String("https-listen", "", "HTTPS control web listen address (defaults to config control_listen_https)")
 	configPath := flag.String("config", "./astrax-config.json", "path to config file")
 	force := flag.Bool("force", false, "allow multiple instances with the same config")
+	ownerHelper := flag.String("dvb-owner-helper", "", "absolute path to a read-only DVB ownership helper (no arguments)")
 	flag.Parse()
+	if *ownerHelper != "" && (!filepath.IsAbs(*ownerHelper) || filepath.Clean(*ownerHelper) != *ownerHelper) {
+		log.Fatal("dvb-owner-helper must be an absolute executable path")
+	}
 
 	pidFile := pidFilePath(*configPath)
 	if !*force {
@@ -47,7 +52,9 @@ func main() {
 	}
 	defer removePIDFile(pidFile)
 
-	prepared, err := prepareManagement(*configPath, *listen, *httpsListen)
+	prepared, err := prepareManagementWith(*configPath, *listen, *httpsListen, managementDeps{
+		storeOptions: store.Options{AdapterDetector: adapters.SystemDetector{OwnerHelper: *ownerHelper}},
+	})
 	if err != nil {
 		log.Fatalf("management preflight failed: %v", err)
 	}

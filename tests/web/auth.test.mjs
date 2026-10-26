@@ -7,18 +7,19 @@ import {bootstrapAuth, csrfHeader, onUnauthorized, logout, fetchProtected, verif
 import {requestJSON} from '../../web/ui-common.js';
 
 function element() {
-  return {hidden:false, value:'', textContent:'', disabled:false, listeners:{},
+  return {hidden:false, value:'', textContent:'', disabled:false, listeners:{}, attributes:{},
     addEventListener(name, fn) {this.listeners[name] = fn;},
     reset() {for (const field of Object.values(this.elements || {})) field.value = '';}, focus() {this.focused = true;},
-    setAttribute() {}, removeAttribute() {}};
+    setAttribute(name, value) {this.attributes[name] = String(value);}, removeAttribute(name) {delete this.attributes[name];}};
 }
 function documentFixture() {
   const ids = ['authView','authLoginForm','authSetupForm','authNotice','dashboard','logoutButton',
     'changePasswordForm','passwordNotice','managementAddress','authManagementAddress','statusPill',
     'settingsForm','epgForm','epgHealthSources','epgHealthSnapshot','apiSettingsForm',
-    'apiListenerStatus','apiOperationDescription'];
+    'apiListenerStatus','apiOperationDescription','authTitle','authLede','authStatus','authPasswordToggle'];
   const nodes = Object.fromEntries(ids.map(id => [id, element()]));
-  nodes.authLoginForm.elements = {password:element()};
+  nodes.authLoginForm.elements = {username:element(),password:element()};
+  nodes.authLoginForm.elements.password.type = 'password';
   nodes.authSetupForm.elements = {secret:element(),password:element(),confirm_password:element()};
   nodes.changePasswordForm.elements = {old_password:element(),new_password:element(),confirm_password:element()};
   nodes.settingsForm.elements = {control_listen:element()};
@@ -50,7 +51,7 @@ test('session boot keeps CSRF in memory and mutation sends it without changing c
   const calls = [];
   t.mock.method(globalThis,'fetch',async (path,options={}) => {
     calls.push({path,options});
-    return Response.json(path === '/api/v1/auth/session' ? {authenticated:true,csrf_token:'token-one'} : {ok:true});
+    return Response.json(path === '/api/v1/auth/session' ? {authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'token-one'} : {ok:true});
   });
   let started = 0;
   await bootstrapAuth({document:doc,onAuthenticated:()=>started++});
@@ -70,7 +71,7 @@ test('a management 401 transitions once, clears CSRF, and fences stale responses
   const {doc,nodes} = documentFixture();
   let expired = 0;
   t.mock.method(globalThis,'fetch',async path => Response.json(path === '/api/v1/auth/session'
-    ? {authenticated:true,csrf_token:'token-two'} : {error:'authentication required'},
+    ? {authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'token-two'} : {error:'authentication required'},
     {status:path === '/api/v1/auth/session' ? 200 : 401}));
   await bootstrapAuth({document:doc,onExpired:()=>expired++});
   await assert.rejects(requestJSON('/api/v1/status'),error => error.status === 401);
@@ -87,7 +88,7 @@ test('logout sends CSRF and clears the authenticated shell', async t => {
   t.mock.method(globalThis,'fetch',async (path,options) => {
     calls.push({path,options});
     return Response.json(path === '/api/v1/auth/session'
-      ? {authenticated:true,csrf_token:'token-three'} : {authenticated:false});
+      ? {authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'token-three'} : {authenticated:false});
   });
   await bootstrapAuth({document:doc});
   await logout();
@@ -98,6 +99,42 @@ test('logout sends CSRF and clears the authenticated shell', async t => {
 });
 
 const flush = async () => {for (let i=0;i<8;i++) await new Promise(setImmediate);};
+
+test('login submits the entered username instead of a hard-coded administrator', async t => {
+  const {doc,nodes} = documentFixture();
+  const calls = [];
+  t.mock.method(globalThis,'fetch',async (path,options) => {
+    calls.push({path,options});
+    return path === '/api/v1/auth/session' ? Response.json({authenticated:false},{status:401})
+      : Response.json({error:'invalid credentials'},{status:401});
+  });
+  await bootstrapAuth({document:doc});
+  const form = nodes.authLoginForm;
+  form.elements.username.value = 'operator-one';
+  form.elements.password.value = 'test-only-password';
+  form.listeners.submit({preventDefault(){},currentTarget:form});
+  await flush();
+  assert.deepEqual(JSON.parse(calls[1].options.body),{username:'operator-one',password:'test-only-password'});
+  assert.equal(nodes.authLoginForm.elements.username.focused,true);
+});
+
+test('password visibility toggle makes no request and resets at the login boundary', async t => {
+  const {doc,nodes} = documentFixture();
+  let calls = 0;
+  t.mock.method(globalThis,'fetch',async () => {calls++; return Response.json({authenticated:false},{status:401});});
+  await bootstrapAuth({document:doc});
+  const toggle = nodes.authPasswordToggle;
+  toggle.listeners.click();
+  assert.equal(nodes.authLoginForm.elements.password.type,'text');
+  assert.equal(toggle.attributes['aria-label'],'Hide password');
+  assert.equal(toggle.attributes['aria-pressed'],'true');
+  assert.equal(calls,1);
+  await bootstrapAuth({document:documentFixture().doc});
+  const next = documentFixture();
+  await bootstrapAuth({document:next.doc});
+  assert.equal(next.nodes.authLoginForm.elements.password.type,'password');
+  assert.equal(next.nodes.authPasswordToggle.attributes['aria-pressed'],'false');
+});
 
 test('expire then login keeps populated settings, EPG, and API pages hidden until a clean boot', async t => {
   const oldPage = documentFixture();
@@ -114,13 +151,13 @@ test('expire then login keeps populated settings, EPG, and API pages hidden unti
   t.mock.method(globalThis,'fetch',async path => {
     if (path === '/api/v1/auth/session') {
       sessionChecks++;
-      return sessionChecks === 1 ? Response.json({authenticated:true,csrf_token:'old-csrf'})
+      return sessionChecks === 1 ? Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'old-csrf'})
         : new Promise(resolve => {finishFreshSession = resolve;});
     }
     if (path === '/slow-refresh') return new Promise(resolve => {finishOldRefresh = resolve;});
     if (path === '/fresh-refresh') return new Promise(resolve => {finishFreshRefresh = resolve;});
     if (path === '/expired') return Response.json({error:'expired'},{status:401});
-    if (path === '/api/v1/auth/login') return Response.json({authenticated:true,csrf_token:'login-csrf'});
+    if (path === '/api/v1/auth/login') return Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'login-csrf'});
     throw new Error(`unexpected ${path}`);
   });
   await bootstrapAuth({document:doc,onAuthenticated:()=>starts++});
@@ -151,7 +188,7 @@ test('expire then login keeps populated settings, EPG, and API pages hidden unti
   }});
   assert.equal(freshPage.nodes.dashboard.hidden,true);
   assert.equal(freshPage.nodes.settingsForm.elements.control_listen.value,'');
-  finishFreshSession(Response.json({authenticated:true,csrf_token:'fresh-csrf'}));
+  finishFreshSession(Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'fresh-csrf'}));
   await boot;
   assert.equal(starts,2);
   assert.equal(freshPage.nodes.dashboard.hidden,false);
@@ -177,7 +214,7 @@ test('successful password change signs out and clears the password form', async 
   t.mock.method(globalThis,'fetch',async (path,options={}) => {
     calls.push({path,options});
     return Response.json(path === '/api/v1/auth/session'
-      ? {authenticated:true,csrf_token:'change-csrf'} : {authenticated:false});
+      ? {authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'change-csrf'} : {authenticated:false});
   });
   await bootstrapAuth({document:doc});
   const form = nodes.changePasswordForm;
@@ -203,8 +240,8 @@ test('setup submits secret once, and a later login waits for clean dashboard boo
     calls.push({path,options});
     if (path === '/api/v1/auth/session') return ++sessionChecks === 1
       ? Response.json({setup_pending:true},{status:401})
-      : Response.json({authenticated:true,csrf_token:'fresh-csrf'});
-    return Response.json(path === '/api/v1/auth/logout' ? {authenticated:false} : {authenticated:true,csrf_token:'fresh-csrf'});
+      : Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'fresh-csrf'});
+    return Response.json(path === '/api/v1/auth/logout' ? {authenticated:false} : {authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'fresh-csrf'});
   });
   let started = 0;
   await bootstrapAuth({document:doc,onAuthenticated:()=>started++});
@@ -239,7 +276,7 @@ test('direct EPG 401 and SSE session expiry share the same transition', async t 
   t.mock.method(globalThis,'fetch',async path => {
     if (path === '/api/v1/auth/session') {
       sessionChecks++;
-      return sessionChecks === 1 ? Response.json({authenticated:true,csrf_token:'epg-csrf'})
+      return sessionChecks === 1 ? Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'epg-csrf'})
         : Response.json({authenticated:false,setup_pending:false},{status:401});
     }
     return new Response('private EPG',{status:401});
@@ -256,7 +293,7 @@ test('a parsed success cannot rehydrate the dashboard after a concurrent 401', a
   const {doc} = documentFixture();
   let finishJSON;
   t.mock.method(globalThis,'fetch',async path => {
-    if (path === '/api/v1/auth/session') return Response.json({authenticated:true,csrf_token:'race-csrf'});
+    if (path === '/api/v1/auth/session') return Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'race-csrf'});
     if (path === '/slow') return {status:200,ok:true,json:() => new Promise(resolve => {finishJSON = resolve;})};
     return Response.json({error:'authentication required'},{status:401});
   });
@@ -273,7 +310,7 @@ test('transient session-probe failure permits SSE retry without logging out', as
   let checks = 0;
   t.mock.method(globalThis,'fetch',async () => {
     checks++;
-    return checks === 1 ? Response.json({authenticated:true,csrf_token:'sse-csrf'})
+    return checks === 1 ? Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'sse-csrf'})
       : Response.json({error:'temporarily unavailable'},{status:503});
   });
   await bootstrapAuth({document:doc});
@@ -287,9 +324,9 @@ test('late 401 from an old session cannot evict a newer login', async t => {
   let loggedIn = false;
   t.mock.method(globalThis,'fetch',async path => {
     if (path === '/old') return new Promise(resolve => {oldReply = resolve;});
-    if (path === '/api/v1/auth/session') return Response.json({authenticated:true,csrf_token:loggedIn ? 'new-csrf' : 'old-csrf'});
+    if (path === '/api/v1/auth/session') return Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:loggedIn ? 'new-csrf' : 'old-csrf'});
     if (path === '/api/v1/auth/logout') return Response.json({authenticated:false});
-    if (path === '/api/v1/auth/login') {loggedIn = true;return Response.json({authenticated:true,csrf_token:'new-csrf'});}
+    if (path === '/api/v1/auth/login') {loggedIn = true;return Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'new-csrf'});}
     throw new Error(`unexpected ${path}`);
   });
   await bootstrapAuth({document:doc});
@@ -315,12 +352,12 @@ test('late EventSource auth probe cannot expire a newer login', async t => {
   t.mock.method(globalThis,'fetch',async path => {
     if (path === '/api/v1/auth/session') {
       inspectCount++;
-      return inspectCount === 1 ? Response.json({authenticated:true,csrf_token:'old-csrf'})
+      return inspectCount === 1 ? Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'old-csrf'})
         : inspectCount === 2 ? new Promise(resolve => {finishProbe = resolve;})
-        : Response.json({authenticated:true,csrf_token:'new-csrf'});
+        : Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'new-csrf'});
     }
     if (path === '/api/v1/auth/logout') return Response.json({authenticated:false});
-    if (path === '/api/v1/auth/login') return Response.json({authenticated:true,csrf_token:'new-csrf'});
+    if (path === '/api/v1/auth/login') return Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'new-csrf'});
     throw new Error(`unexpected ${path}`);
   });
   await bootstrapAuth({document:doc});
@@ -345,10 +382,10 @@ test('late password-change completion cannot sign out a newer session', async t 
   let finishChange;
   let loggedIn = false;
   t.mock.method(globalThis,'fetch',async path => {
-    if (path === '/api/v1/auth/session') return Response.json({authenticated:true,csrf_token:loggedIn ? 'new-csrf' : 'old-csrf'});
+    if (path === '/api/v1/auth/session') return Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:loggedIn ? 'new-csrf' : 'old-csrf'});
     if (path === '/api/v1/auth/password') return new Promise(resolve => {finishChange = resolve;});
     if (path === '/api/v1/auth/logout') return Response.json({authenticated:false});
-    if (path === '/api/v1/auth/login') {loggedIn = true;return Response.json({authenticated:true,csrf_token:'new-csrf'});}
+    if (path === '/api/v1/auth/login') {loggedIn = true;return Response.json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'new-csrf'});}
     throw new Error(`unexpected ${path}`);
   });
   await bootstrapAuth({document:doc});
@@ -374,10 +411,18 @@ test('late password-change completion cannot sign out a newer session', async t 
 test('cleanup failure cannot keep the protected dashboard visible after 401', async t => {
   const {doc,nodes} = documentFixture();
   t.mock.method(globalThis,'fetch',async path => Response.json(path === '/api/v1/auth/session'
-    ? {authenticated:true,csrf_token:'csrf'} : {error:'expired'},
+    ? {authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'csrf'} : {error:'expired'},
     {status:path === '/api/v1/auth/session' ? 200 : 401}));
   await bootstrapAuth({document:doc,onExpired:()=>{throw new Error('cleanup failed');}});
   await assert.rejects(requestJSON('/api/v1/status'),error => error.status === 401);
   assert.equal(nodes.dashboard.hidden,true);
   assert.equal(nodes.authLoginForm.hidden,false);
+});
+
+
+test('an authenticated response without a named valid role never reveals management', async t => {
+  const {doc,nodes} = documentFixture();
+  t.mock.method(globalThis,'fetch', async () => Response.json({authenticated:true,csrf_token:'missing-principal'}));
+  assert.equal(await bootstrapAuth({document:doc}),false);
+  assert.equal(nodes.dashboard.hidden,true);
 });

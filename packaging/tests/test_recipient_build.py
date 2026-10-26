@@ -16,17 +16,71 @@ from packaging import recipient_build
 class RecipientBuildModeTests(TestCase):
     def test_current_source_stage_is_the_only_default_recipe_identity(self):
         self.assertEqual(recipient_build.SOURCE_COMMIT,
-                         "3e3b81102b01cb751b2e6d1cf64f6ffe00fa4f9e")
+                         "9f0459fa0b01f827cf98c80aafb52d0479f1ac4d")
         self.assertEqual(recipient_build.MANIFEST_SHA256,
-                         "49c3d2f00e3f5f583f620368673a0bb3c106d4c865f2a5fbbeb4af2eb42c8ae4")
+                         "955ba68b5579ee587a93b6175691ec56fbb98d858e47e58d58c15df274857ab8")
         self.assertEqual(recipient_build.SOURCE_ARCHIVE,
-                         "source/astrax-3e3b81102b01-source.tar.gz")
+                         "source/astrax-accounts-20261024-source.tar.gz")
         self.assertEqual(recipient_build.PINS[recipient_build.SOURCE_ARCHIVE],
-                         "4d682f1264c279bad5c1f1eadd8a324347e5f5afafc69b09d26a21bb8a42c656")
+                         "a22cbe4683c5c44c9ba4eee57c4fc5b8e7800b2a98718e234e4b8459417792aa")
         for module, spec in recipient_build.AUTH_MODULE_PINS.items():
             archive = f"source/{module.replace('/', '_')}_{spec['version']}.zip"
             self.assertEqual(recipient_build.PINS[archive], spec["sha256"]["zip"])
         self.assertNotIn("source/golang.org_x_text_v0.37.0.zip", recipient_build.PINS)
+
+    def test_owner_helper_is_built_without_cgo_or_an_elf_interpreter(self):
+        self.assertTrue(hasattr(recipient_build, "build_owner_helper"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, candidate, logs = (root / name for name in ("source", "candidate", "logs"))
+            for path in (source, candidate, logs):
+                path.mkdir()
+            commands = []
+
+            def run(command, *, cwd, env, logs, name):
+                commands.append((command, env.copy(), name))
+                if name == "owner-helper-build":
+                    (candidate / "astrax-dvb-owners").write_bytes(b"synthetic static helper")
+                    return ""
+                if name == "owner-helper-program-headers":
+                    return "Elf file type is EXEC\nLOAD\nGNU_STACK\n"
+                if name == "owner-helper-build-info":
+                    return "go1.26.9\nbuild\tCGO_ENABLED=0\nbuild\tGOOS=linux\nbuild\tGOARCH=amd64"
+                self.fail(f"unexpected command {name}")
+
+            with patch.object(recipient_build, "_run", side_effect=run):
+                result = recipient_build.build_owner_helper("/go/bin/go", source, candidate,
+                                                           {"CGO_ENABLED": "1"}, logs)
+            self.assertEqual(result, hashlib.sha256(b"synthetic static helper").hexdigest())
+            self.assertEqual(commands[0][0], ["/go/bin/go", "build", "-trimpath", "-buildvcs=false",
+                                            "-o", str(candidate / "astrax-dvb-owners"),
+                                            "./cmd/astrax-dvb-owners"])
+            self.assertTrue(all(env["CGO_ENABLED"] == "0" for _, env, _ in commands))
+
+    def test_owner_helper_rejects_missing_dynamic_or_wrong_target_output(self):
+        self.assertTrue(hasattr(recipient_build, "build_owner_helper"))
+        cases = ("missing", "interpreter", "dynamic", "cgo", "wrong-target")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                source, candidate, logs = (root / name for name in ("source", "candidate", "logs"))
+                for path in (source, candidate, logs):
+                    path.mkdir()
+
+                def run(command, *, cwd, env, logs, name):
+                    if name == "owner-helper-build":
+                        if case != "missing":
+                            (candidate / "astrax-dvb-owners").write_bytes(b"helper")
+                        return ""
+                    if name == "owner-helper-program-headers":
+                        return "INTERP" if case == "interpreter" else "DYNAMIC" if case == "dynamic" else "LOAD"
+                    return ("go1.26.9\nbuild\tCGO_ENABLED=" + ("1" if case == "cgo" else "0") +
+                            "\nbuild\tGOOS=" + ("darwin" if case == "wrong-target" else "linux") +
+                            "\nbuild\tGOARCH=amd64")
+
+                with patch.object(recipient_build, "_run", side_effect=run):
+                    with self.assertRaisesRegex(recipient_build.SourceBuildError, "helper"):
+                        recipient_build.build_owner_helper("go", source, candidate, {}, logs)
 
     def test_module_profile_rejects_incomplete_auth_dependency_set(self):
         self.assertTrue(hasattr(recipient_build, "module_profile"))

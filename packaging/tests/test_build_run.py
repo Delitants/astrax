@@ -16,11 +16,13 @@ EMBEDDED_SOURCES = {
     "share/build/installer_header.sh": PACKAGING_DIR / "installer_header.sh",
     "share/build/qa_extract_header.sh": PACKAGING_DIR / "qa_extract_header.sh",
     "share/build/installer_core.sh": PACKAGING_DIR / "installer_core.sh",
+    "share/build/dvb-owner-helper.sh": PACKAGING_DIR / "dvb-owner-helper.sh",
     **{f"share/build/init/{name}.in": PACKAGING_DIR / "init" / f"{name}.in" for name in ("systemd", "openrc", "sysv")},
 }
 
 TEST_IDENTITY = {
     "binary_sha256": hashlib.sha256(b"\x7fELFsynthetic-astrax").hexdigest(),
+    "owner_helper_sha256": hashlib.sha256(b"\x7fELFsynthetic-dvb-owners").hexdigest(),
     "srt_sha256": hashlib.sha256(b"\x7fELFsynthetic-srt").hexdigest(),
     "source_commit": "synthetic",
     "source_sha256": hashlib.sha256(b"Synthetic source\n").hexdigest(),
@@ -43,7 +45,8 @@ def build_payload(path, output):
     return _build_payload(path, output, identity=TEST_IDENTITY)
 
 
-def make_release(root: Path, *, cleared: bool = True, publication: bool | None = None) -> Path:
+def make_release(root: Path, *, cleared: bool = True, publication: bool | None = None,
+                 helper: bool = True, held_candidate: bool = False, status_updates: dict | None = None) -> Path:
     root.mkdir()
     files = {
         "astrax": b"\x7fELFsynthetic-astrax",
@@ -53,6 +56,9 @@ def make_release(root: Path, *, cleared: bool = True, publication: bool | None =
         "share/source/dependency.tar.gz": b"Synthetic dependency\n",
         **{name: path.read_bytes() for name, path in EMBEDDED_SOURCES.items()},
     }
+    if helper:
+        files["astrax-dvb-owners"] = b"\x7fELFsynthetic-dvb-owners"
+        files["dvb-owner-helper"] = (PACKAGING_DIR / "dvb-owner-helper.sh").read_bytes()
     status = {
         "distribution_cleared": cleared,
         "publication_cleared": cleared if publication is None else publication,
@@ -64,12 +70,15 @@ def make_release(root: Path, *, cleared: bool = True, publication: bool | None =
         "source_commit": "synthetic",
         "target_profile": "ubuntu-24.04-amd64-systemd",
     }
+    if held_candidate:
+        status.update(held_candidate=True, private_install_qa=False)
+    status.update(status_updates or {})
     files["STATUS.json"] = (json.dumps(status, sort_keys=True) + "\n").encode()
     for name, contents in files.items():
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(contents)
-        path.chmod(0o755 if name == "astrax" else 0o644)
+        path.chmod(0o755 if name in ("astrax", "astrax-dvb-owners", "dvb-owner-helper") else 0o644)
     (root / "lib/libastrax_srt.so.1").symlink_to("libastrax_srt.so.1.4.0")
     manifest = {
         "schema": 1,
@@ -79,13 +88,90 @@ def make_release(root: Path, *, cleared: bool = True, publication: bool | None =
                 "path": name,
                 "sha256": hashlib.sha256(contents).hexdigest(),
                 "size": len(contents),
-                "mode": oct(0o755 if name == "astrax" else 0o644),
+                "mode": oct(0o755 if name in ("astrax", "astrax-dvb-owners", "dvb-owner-helper") else 0o644),
             }
             for name, contents in sorted(files.items())
         ],
     }
     (root / "MANIFEST.json").write_text(json.dumps(manifest) + "\n")
     return root
+
+
+class HeldCandidateTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+
+    def build(self, release, output=None, identity=None):
+        from packaging import build_run as builder
+
+        function = getattr(builder, "build_held_candidate_run", None)
+        self.assertTrue(callable(function), "explicit held-candidate builder is missing")
+        return function(release, output or self.base / "astrax-HELD-CANDIDATE.run",
+                        identity=identity or TEST_IDENTITY)
+
+    def test_held_candidate_builds_normal_header_with_false_clearances_and_private_mode(self):
+        release = make_release(self.base / "held", cleared=False, held_candidate=True)
+        output = self.build(release)
+        self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+        header, payload = output.read_bytes().split(b"__ASTRAX_PAYLOAD_BELOW__\n", 1)
+        self.assertIn(b"ASTRAX_PRIVATE_INSTALL_QA='0'", header)
+        self.assertIn(b"ASTRAX_RELEASE_TARGET='ubuntu-24.04-amd64-systemd'", header)
+        self.assertIn(b"astrax_activate", header)
+        import io
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
+            status = json.load(archive.extractfile("STATUS.json"))
+        self.assertFalse(status["distribution_cleared"])
+        self.assertFalse(status["publication_cleared"])
+        self.assertFalse(status["private_install_qa"])
+        self.assertTrue(status["held_candidate"])
+
+    def test_held_candidate_requires_unmistakable_filename(self):
+        release = make_release(self.base / "held", cleared=False, held_candidate=True)
+        for name in ("astrax.run", "astrax-HELD-CANDIDATE.txt"):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "HELD-CANDIDATE"):
+                self.build(release, self.base / name)
+
+    def test_held_candidate_refuses_clearance_qualification_closure_and_target_drift(self):
+        for index, (field, value) in enumerate((
+            ("distribution_cleared", True), ("publication_cleared", True),
+            ("production_or_dvb_access", True), ("private_install_qa", True),
+            ("held_candidate", False), ("held_candidate", 1),
+            ("candidate_qualified", False), ("source_closure", "held"),
+            ("notice_closure", "held"), ("target_profile", "other-linux"),
+        )):
+            release = make_release(self.base / str(index), cleared=False, held_candidate=True,
+                                   status_updates={field: value})
+            with self.subTest(field=field, value=value), self.assertRaisesRegex(ValueError, field):
+                self.build(release, self.base / f"rejected-{index}-HELD-CANDIDATE.run")
+
+    def test_public_builder_still_refuses_held_candidate_even_if_clearances_are_changed(self):
+        from packaging.build_run import build_run
+
+        release = make_release(self.base / "held", cleared=False, held_candidate=True)
+        with self.assertRaises(ValueError):
+            build_run(release, self.base / "astrax.run", identity=TEST_IDENTITY)
+        changed = make_release(self.base / "cleared", cleared=True, held_candidate=True)
+        with self.assertRaisesRegex(ValueError, "held_candidate"):
+            build_run(changed, self.base / "changed.run", identity=TEST_IDENTITY)
+
+    def test_held_mode_is_mutually_exclusive_with_qa_modes(self):
+        release = make_release(self.base / "held", cleared=False, held_candidate=True)
+        for flag in ("qa_only", "private_install_qa"):
+            with self.subTest(flag=flag), self.assertRaisesRegex(ValueError, "mutually exclusive"):
+                _validate_release(release, identity=TEST_IDENTITY, held_candidate=True, **{flag: True})
+
+    def test_held_mode_preserves_binary_helper_and_source_pins(self):
+        release = make_release(self.base / "held", cleared=False, held_candidate=True)
+        for index, field in enumerate(("binary_sha256", "owner_helper_sha256")):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.build(release, self.base / f"bad-{index}-HELD-CANDIDATE.run",
+                           {**TEST_IDENTITY, field: "0" * 64})
+        pins = {**TEST_IDENTITY["required_source_sha256"], "share/build/installer_core.sh": "0" * 64}
+        with self.assertRaisesRegex(ValueError, "source"):
+            self.build(release, self.base / "bad-source-HELD-CANDIDATE.run",
+                       {**TEST_IDENTITY, "required_source_sha256": pins})
 
 
 class ReleaseGateTests(unittest.TestCase):
@@ -102,8 +188,49 @@ class ReleaseGateTests(unittest.TestCase):
         with tarfile.open(first, "r:gz") as archive:
             names = archive.getnames()
         self.assertIn("astrax", names)
+        self.assertIn("astrax-dvb-owners", names)
         self.assertIn("lib/libastrax_srt.so.1", names)
         self.assertNotIn("bin/astrax", names)
+
+    def test_missing_pinned_dvb_helper_is_refused(self):
+        legacy = make_release(self.base / "missing-helper", helper=False)
+        with self.assertRaisesRegex(ValueError, "DVB ownership helper"):
+            validate_release(legacy)
+
+    def test_wrong_dvb_helper_identity_is_refused(self):
+        identity = {**TEST_IDENTITY, "owner_helper_sha256": "0" * 64}
+        with self.assertRaisesRegex(ValueError, "DVB ownership helper"):
+            _validate_release(self.release, identity=identity)
+
+    def test_malformed_dvb_helper_pin_is_refused(self):
+        for digest in (None, "", "0" * 63, "z" * 64, 1):
+            with self.subTest(digest=digest), self.assertRaisesRegex(ValueError, "DVB ownership helper"):
+                _validate_release(self.release, identity={**TEST_IDENTITY, "owner_helper_sha256": digest})
+
+    def test_old_identity_without_dvb_helper_still_validates(self):
+        legacy = make_release(self.base / "legacy", helper=False)
+        identity = {key: value for key, value in TEST_IDENTITY.items() if key != "owner_helper_sha256"}
+        self.assertEqual(_validate_release(legacy, identity=identity)["schema"], 1)
+
+    def test_unpinned_dvb_helper_is_refused(self):
+        identity = {key: value for key, value in TEST_IDENTITY.items() if key != "owner_helper_sha256"}
+        with self.assertRaisesRegex(ValueError, "DVB ownership helper"):
+            _validate_release(self.release, identity=identity)
+
+    def test_new_run_builders_require_dvb_helper_identity(self):
+        from packaging.build_run import build_run, build_qa_run, build_private_install_qa_run
+
+        identity = {key: value for key, value in TEST_IDENTITY.items() if key != "owner_helper_sha256"}
+        for index, (builder, cleared, name) in enumerate((
+            (build_run, True, "astrax.run"),
+            (build_qa_run, False, "astrax-QA-ONLY.run"),
+            (build_private_install_qa_run, False, "astrax-PRIVATE-INSTALL-QA.run"),
+        )):
+            with self.subTest(builder=builder.__name__):
+                legacy = make_release(self.base / f"legacy-{index}", cleared=cleared, helper=False)
+                with self.assertRaisesRegex(ValueError, "DVB ownership helper"):
+                    builder(legacy, self.base / name, identity=identity)
+                self.assertFalse((self.base / name).exists())
 
     def test_held_release_is_refused(self):
         status_path = self.release / "STATUS.json"
@@ -192,6 +319,31 @@ class ReleaseGateTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "embedded installer source is not pinned"):
             build_run(self.release, self.base / "astrax.run", identity=identity)
+
+    def test_installer_refuses_unpinned_dvb_launcher_source(self):
+        from packaging.build_run import build_run
+
+        name = "share/build/dvb-owner-helper.sh"
+        identity = {
+            **TEST_IDENTITY,
+            "required_source_paths": [path for path in TEST_IDENTITY["required_source_paths"] if path != name],
+            "required_source_sha256": {path: digest for path, digest in TEST_IDENTITY["required_source_sha256"].items() if path != name},
+        }
+        with self.assertRaisesRegex(ValueError, "installer source is not pinned"):
+            build_run(self.release, self.base / "astrax.run", identity=identity)
+
+    def test_installer_refuses_root_launcher_different_from_pinned_source(self):
+        from packaging.build_run import build_run
+
+        launcher = self.release / "dvb-owner-helper"
+        launcher.write_bytes(b"#!/bin/sh\nexec /bin/sh\n")
+        manifest_path = self.release / "MANIFEST.json"
+        manifest = json.loads(manifest_path.read_text())
+        entry = next(item for item in manifest["files"] if item["path"] == "dvb-owner-helper")
+        entry.update(size=launcher.stat().st_size, sha256=hashlib.sha256(launcher.read_bytes()).hexdigest())
+        manifest_path.write_text(json.dumps(manifest) + "\n")
+        with self.assertRaisesRegex(ValueError, "launcher.*pinned source"):
+            build_run(self.release, self.base / "astrax.run", identity=TEST_IDENTITY)
 
     def test_missing_corresponding_source_is_refused(self):
         (self.release / "share/source/README.txt").unlink()

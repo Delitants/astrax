@@ -37,17 +37,18 @@ test('setup, login, logout, expiry and keyboard/mobile auth shell in real app co
       calls.push({path:url.pathname,method:request.method(),headers:request.headers(),body:request.postData()});
       const json = (body,status=200) => route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
       if (url.pathname === '/api/v1/auth/session') return authenticated && !expired
-        ? json({authenticated:true,csrf_token:'browser-csrf'})
+        ? json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'browser-csrf'})
         : json({authenticated:false,setup_pending:!enrolled},401);
       if (url.pathname === '/api/v1/auth/setup') {
         assert.deepEqual(request.postDataJSON(),{secret:'one-time-secret',password:'Long-Test-Password-2026!'});
         enrolled = authenticated = true;
-        return json({authenticated:true,csrf_token:'browser-csrf'});
+        return json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'browser-csrf'});
       }
       if (url.pathname === '/api/v1/auth/login') {
         assert.equal(request.postDataJSON().password,'Long-Test-Password-2026!');
+        assert.equal(request.postDataJSON().username,'admin');
         authenticated = true; expired = false;
-        return json({authenticated:true,csrf_token:'browser-csrf'});
+        return json({authenticated:true,user:{username:'admin',role:'administrator',enabled:true},csrf_token:'browser-csrf'});
       }
       if (url.pathname === '/api/v1/auth/logout') {
         assert.equal(request.headers()['x-astrax-csrf'],'browser-csrf');
@@ -83,6 +84,7 @@ test('setup, login, logout, expiry and keyboard/mobile auth shell in real app co
     await page.locator('#logoutButton').click();
     await page.waitForSelector('#authLoginForm:visible');
     assert.equal(await page.locator('#dashboard').isVisible(),false);
+    await page.locator('#authLoginForm [name=username]').fill('admin');
     await page.locator('#authLoginForm [name=password]').fill('Long-Test-Password-2026!');
     await page.locator('#authLoginForm [name=password]').press('Enter');
     await page.waitForSelector('#dashboard:visible');
@@ -94,6 +96,7 @@ test('setup, login, logout, expiry and keyboard/mobile auth shell in real app co
     await page.locator('#refreshEpgBtn').click();
     await page.waitForSelector('#authLoginForm:visible');
     assert.equal(await page.locator('#dashboard').isVisible(),false);
+    await page.locator('#authLoginForm [name=username]').fill('admin');
     await page.locator('#authLoginForm [name=password]').fill('Long-Test-Password-2026!');
     await Promise.all([
       page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/epg/status'),

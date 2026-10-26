@@ -4,6 +4,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -71,6 +72,23 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	streamEventChannel(w, r, ch, active, fullValid, func(event model.ResourceEvent) (bool, error) {
+		if restrictedManagement(r) {
+			projected, err := monitoringValue(event.Payload)
+			if err != nil {
+				return true, err
+			}
+			data, err := json.Marshal(projected)
+			if err != nil {
+				return true, err
+			}
+			if event.Payload != nil {
+				payload, err := model.NewEventWirePayload(data)
+				if err != nil {
+					return true, err
+				}
+				event.Payload = payload
+			}
+		}
 		return event.Kind == "resync_required", writeResourceEvent(w, event)
 	})
 }
@@ -86,6 +104,15 @@ func (s *Server) handleSnapshotEvents(w http.ResponseWriter, r *http.Request, ex
 	writeSnapshot := func(snapshot model.StateSnapshot) error {
 		if external {
 			snapshot.Streams = externalStreams(snapshot.Streams)
+		}
+		if restrictedManagement(r) {
+			// Never expose raw logs, softcam profiles or adapter credentials in
+			// the legacy monitoring feed, even though it shares a subscriber.
+			projected, err := monitoringValue(map[string]any{"at": snapshot.At, "status": snapshot.Status, "streams": snapshot.Streams})
+			if err != nil {
+				return err
+			}
+			return writeSSE(w, "snapshot", projected)
 		}
 		return writeSSE(w, "snapshot", snapshot)
 	}

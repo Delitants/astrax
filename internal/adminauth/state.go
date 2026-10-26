@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,12 +24,13 @@ import (
 )
 
 const (
-	stateVersion   = 1
+	stateVersion   = 2
 	argonTime      = 2
 	argonMemoryKiB = 64 * 1024
 	argonThreads   = 1
 	argonKeyLen    = 32
-	maxStateBytes  = 4096
+	maxStateBytes  = 32 * 1024
+	maxUsers       = 64
 )
 
 var (
@@ -37,15 +39,36 @@ var (
 )
 
 type authState struct {
-	Version      int    `json:"version"`
-	Phase        string `json:"phase"`
-	SetupSalt    string `json:"setup_salt,omitempty"`
-	SetupHash    string `json:"setup_hash,omitempty"`
-	PasswordSalt string `json:"password_salt,omitempty"`
-	PasswordHash string `json:"password_hash,omitempty"`
+	Version      int         `json:"version"`
+	Phase        string      `json:"phase"`
+	SetupSalt    string      `json:"setup_salt,omitempty"`
+	SetupHash    string      `json:"setup_hash,omitempty"`
+	PasswordSalt string      `json:"password_salt,omitempty"`
+	PasswordHash string      `json:"password_hash,omitempty"`
+	Users        []userState `json:"users,omitempty"`
 }
 
-// Manager owns one durable administrator identity and ephemeral browser sessions.
+type userState struct {
+	User
+	PasswordSalt string `json:"password_salt"`
+	PasswordHash string `json:"password_hash"`
+}
+
+func sameState(a, b authState) bool {
+	return a.Version == b.Version && a.Phase == b.Phase && a.SetupSalt == b.SetupSalt && a.SetupHash == b.SetupHash &&
+		a.PasswordSalt == b.PasswordSalt && a.PasswordHash == b.PasswordHash && slices.Equal(a.Users, b.Users)
+}
+
+func (s authState) userIndex(username string) int {
+	for i, user := range s.Users {
+		if user.Username == username {
+			return i
+		}
+	}
+	return -1
+}
+
+// Manager owns durable named identities and ephemeral browser sessions.
 type Manager struct {
 	mu             sync.Mutex
 	configPath     string
@@ -149,6 +172,16 @@ func Open(configPath string, initialized bool) (*Manager, error) {
 			}
 		}
 	}
+	if state.Version == 1 {
+		state.Version = stateVersion
+		if state.Phase == "enrolled" {
+			state.Users = []userState{{User: User{Username: "admin", Role: RoleAdministrator, Enabled: true}, PasswordSalt: state.PasswordSalt, PasswordHash: state.PasswordHash}}
+			state.PasswordSalt, state.PasswordHash = "", ""
+		}
+		if err := persistState(configPath, state); err != nil {
+			return nil, err
+		}
+	}
 	m := &Manager{configPath: configPath, state: state, now: time.Now, sessions: make(map[[32]byte]sessionRecord), sourceAttempts: make(map[string]int), setupSources: make(map[string]int)}
 	if _, err := rand.Read(m.csrfKey[:]); err != nil {
 		return nil, fmt.Errorf("initialize sessions: %w", err)
@@ -167,7 +200,7 @@ func (m *Manager) stateCurrentLocked() bool {
 		return false
 	}
 	current, err := loadCurrentState(m.configPath)
-	if err == nil && current == m.state {
+	if err == nil && sameState(current, m.state) {
 		data, exists, setupErr := readSecureFile(SetupSecretPath(m.configPath), 128)
 		if setupErr == nil {
 			if current.Phase == "pending" && exists {
@@ -202,7 +235,8 @@ func (m *Manager) Enroll(secret, password string) error {
 	}
 	defer unlockState(lock)
 	current, err := loadCurrentState(m.configPath)
-	if err != nil || current != m.state {
+	if err != nil || !sameState(current, m.state) {
+		m.failClosedLocked()
 		return errInvalidState
 	}
 	setupData, exists, err := readSecureFile(SetupSecretPath(m.configPath), 128)
@@ -220,8 +254,9 @@ func (m *Manager) Enroll(secret, password string) error {
 	if err != nil {
 		return err
 	}
-	next := authState{Version: stateVersion, Phase: "enrolled", PasswordSalt: encode(salt), PasswordHash: encode(hashSecret(password, salt))}
+	next := authState{Version: stateVersion, Phase: "enrolled", Users: []userState{{User: User{Username: "admin", Role: RoleAdministrator, Enabled: true}, PasswordSalt: encode(salt), PasswordHash: encode(hashSecret(password, salt))}}}
 	if err := persistState(m.configPath, next); err != nil {
+		m.failClosedLocked()
 		return err
 	}
 	m.state = next
@@ -292,7 +327,46 @@ func parseSetupSecret(data []byte) (string, error) {
 	return secret, nil
 }
 
+// encoding/json otherwise accepts duplicate keys, case aliases and null scalars.
+func strictStateObject(data []byte, keys ...string) (map[string]json.RawMessage, bool) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return nil, false
+	}
+	fields := make(map[string]json.RawMessage, len(keys))
+	for decoder.More() {
+		token, err := decoder.Token()
+		key, ok := token.(string)
+		if err != nil || !ok || !slices.Contains(keys, key) {
+			return nil, false
+		}
+		if _, exists := fields[key]; exists {
+			return nil, false
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return nil, false
+		}
+		fields[key] = value
+	}
+	if token, err := decoder.Token(); err != nil || token != json.Delim('}') {
+		return nil, false
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return nil, false
+	}
+	return fields, true
+}
+
 func parseState(data []byte) (authState, error) {
+	if len(data) > maxStateBytes {
+		return authState{}, errInvalidState
+	}
+	fields, ok := strictStateObject(data, "version", "phase", "setup_salt", "setup_hash", "password_salt", "password_hash", "users")
+	if !ok {
+		return authState{}, errInvalidState
+	}
 	var state authState
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
@@ -302,7 +376,13 @@ func parseState(data []byte) (authState, error) {
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return authState{}, errInvalidState
 	}
-	if state.Version != stateVersion {
+	if state.Version != 1 && state.Version != stateVersion {
+		return authState{}, errInvalidState
+	}
+	if state.Version == 1 && fields["users"] != nil {
+		return authState{}, errInvalidState
+	}
+	if state.Version == stateVersion && (fields["password_salt"] != nil || fields["password_hash"] != nil) {
 		return authState{}, errInvalidState
 	}
 	validVerifier := func(saltText, hashText string) bool {
@@ -312,11 +392,43 @@ func parseState(data []byte) (authState, error) {
 	}
 	switch state.Phase {
 	case "pending":
-		if !validVerifier(state.SetupSalt, state.SetupHash) || state.PasswordSalt != "" || state.PasswordHash != "" {
+		if !validVerifier(state.SetupSalt, state.SetupHash) || state.PasswordSalt != "" || state.PasswordHash != "" || fields["users"] != nil {
 			return authState{}, errInvalidState
 		}
 	case "enrolled":
-		if !validVerifier(state.PasswordSalt, state.PasswordHash) || state.SetupSalt != "" || state.SetupHash != "" {
+		if state.SetupSalt != "" || state.SetupHash != "" {
+			return authState{}, errInvalidState
+		}
+		if state.Version == 1 {
+			if !validVerifier(state.PasswordSalt, state.PasswordHash) || len(state.Users) != 0 {
+				return authState{}, errInvalidState
+			}
+			break
+		}
+		if state.PasswordSalt != "" || state.PasswordHash != "" || len(state.Users) == 0 || len(state.Users) > maxUsers {
+			return authState{}, errInvalidState
+		}
+		var userDocuments []json.RawMessage
+		if err := json.Unmarshal(fields["users"], &userDocuments); err != nil {
+			return authState{}, errInvalidState
+		}
+		seen := make(map[string]bool, len(state.Users))
+		administrators := 0
+		for i, user := range state.Users {
+			userFields, ok := strictStateObject(userDocuments[i], "username", "role", "enabled", "password_salt", "password_hash")
+			if !ok || len(userFields) != 5 {
+				return authState{}, errInvalidState
+			}
+			username, ok := normalizeUsername(user.Username)
+			if !ok || username != user.Username || seen[username] || !validRole(user.Role) || !validVerifier(user.PasswordSalt, user.PasswordHash) {
+				return authState{}, errInvalidState
+			}
+			seen[username] = true
+			if user.Enabled && user.Role == RoleAdministrator {
+				administrators++
+			}
+		}
+		if administrators == 0 {
 			return authState{}, errInvalidState
 		}
 	default:

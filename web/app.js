@@ -3,17 +3,21 @@
 
 import { buildOutputURL, parseOutputURL, sanitizeMPEGTSPath, parsePositiveInt } from "./output-builder.js?v=1";
 import { requestJSON as api, formatDuration, confirmAction } from "./ui-common.js?v=18";
-import { createPageNavigation } from "./page-navigation.js?v=20";
+import { createPageNavigation } from "./page-navigation.js?v=21";
 import { createDVBEditor } from "./dvb-editor.js?v=3";
 import { createDVBScan } from "./dvb-scan.js?v=3";
-import { createDVBStreamsController } from "./dvb-streams.js?v=6";
-import { createDVBCardsController } from "./dvb-cards.js?v=23";
+import { createDVBStreamsController } from "./dvb-streams.js?v=7";
+import { createDVBCardsController } from "./dvb-cards.js?v=24";
 import { createPageEventFeed } from "./events.js?v=2";
 import { createAPIManagementController } from "./api-management.js?v=1";
 import { createEPGHealthController } from "./epg-health.js?v=2";
-import {bootstrapAuth, fetchProtected, verifyEventSession, authGeneration} from './auth.js';
+import {bootstrapAuth, fetchProtected, verifyEventSession, authGeneration, authenticatedUser, onUnauthorized} from './auth.js';
+import {permissionsFor, canAccessPage} from './permissions.js';
+import {createUsersController} from './users.js';
 
 const DEFAULT_DES_KEY = "0102030405060708091011121314";
+const canManage = () => permissionsFor(authenticatedUser()).manage;
+const canControl = () => permissionsFor(authenticatedUser()).control;
 
 const state = {
   streams: [],
@@ -285,7 +289,7 @@ function renderStreams() {
   const externalStreams = state.streams.filter((s) => !s.dvb && !s.adapter_profile_id);
   if (!externalStreams.length) {
     const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="10">No external streams yet. Add your first external stream.</td>';
+    row.innerHTML = canManage() ? '<td colspan="10">No external streams yet. Add your first external stream.</td>' : '<td colspan="10">No external streams.</td>';
     els.streamsBody.append(row);
     return;
   }
@@ -312,15 +316,17 @@ function renderStreams() {
     const editBtn = row.querySelector('[data-action="edit"]');
     const deleteBtn = row.querySelector('[data-action="delete"]');
 
-    startBtn.disabled = stream.enabled && stream.runtime?.state !== "error";
-    stopBtn.disabled = !stream.enabled;
-    restartBtn.disabled = !stream.enabled;
+    startBtn.disabled = !canControl() || stream.enabled && stream.runtime?.state !== "error";
+    stopBtn.disabled = !canControl() || !stream.enabled;
+    restartBtn.disabled = !canControl() || !stream.enabled;
+    for (const button of [startBtn,stopBtn,restartBtn]) button.hidden = !canControl();
+    for (const button of [editBtn,deleteBtn]) button.hidden = !canManage();
 
     startBtn.addEventListener("click", () => void controlStream(stream.id, "start"));
     stopBtn.addEventListener("click", () => void controlStream(stream.id, "stop"));
     restartBtn.addEventListener("click", () => void controlStream(stream.id, "restart"));
-    editBtn.addEventListener("click", () => openStreamDialog(stream));
-    deleteBtn.addEventListener("click", () => void deleteStream(stream.id));
+    editBtn.addEventListener("click", () => {if (canManage()) openStreamDialog(stream);});
+    deleteBtn.addEventListener("click", () => {if (canManage()) void deleteStream(stream.id);});
 
     els.streamsBody.append(fragment);
     if (previousURL?.focus) row.querySelector(`.${previousURL.focus} summary`)?.focus({ preventScroll: true });
@@ -750,7 +756,7 @@ function applySnapshot(snapshot) {
 
   state.streams = snapshot.streams || [];
   for (const stream of state.streams) dvbEditor.applyStatus(stream);
-  if (Array.isArray(snapshot.softcams)) {
+  if (canManage() && Array.isArray(snapshot.softcams)) {
     state.softcams = snapshot.softcams;
   }
 
@@ -762,12 +768,13 @@ function applySnapshot(snapshot) {
     updateOverview(snapshot.status);
   }
 
-  if (snapshot.logs && snapshot.logs.length) {
+  if (canManage() && snapshot.logs && snapshot.logs.length) {
     renderLogs(snapshot.logs);
   }
 }
 
 async function controlStream(id, action) {
+  if (!canControl()) return;
   try {
     await api(`/api/v1/streams/${id}/${action}`, { method: "POST" });
     await Promise.all([refreshStreamsAndStatus(), loadLogs()]);
@@ -873,6 +880,7 @@ async function loadAdapters() {
 }
 
 async function loadSoftcams() {
+  if (!canManage()) return;
   const data = await api("/api/v1/softcams");
   state.softcams = data.softcams || [];
   renderSoftcams();
@@ -880,6 +888,7 @@ async function loadSoftcams() {
 }
 
 async function loadSettings(canRender = () => true, acceptedDrafts = {}) {
+  if (!canManage()) return;
   const revision = settingsRevision;
   const settings = await api("/api/v1/settings");
   // Only a newer settings write invalidates data; notice ownership gates form hydration.
@@ -889,6 +898,7 @@ async function loadSettings(canRender = () => true, acceptedDrafts = {}) {
 }
 
 async function loadLogs() {
+  if (!canManage()) return;
   const data = await api("/api/v1/logs?limit=200");
   renderLogs(data.logs || []);
 }
@@ -901,7 +911,7 @@ async function bootstrap() {
       loadSoftcams(),
       loadSettings(),
       loadLogs(),
-      loadCertStatus(),
+      ...(canManage() ? [loadCertStatus()] : []),
     ]);
   } catch (error) {
     showError(error);
@@ -1388,13 +1398,16 @@ Object.defineProperty(window, '__astraxDiagnostics', {value:Object.freeze({
 const dvbEditor = createDVBEditor({requestJSON: api, onSaved: stream => dvbStreamsController.saved(stream)});
 const dvbScan = createDVBScan({requestJSON: api, onImported: () => dvbStreamsController.imported()});
 const dvbStreamsController = createDVBStreamsController({
+  canManage, canControl,
   requestJSON: api, confirmAction, openEditor: id => dvbEditor.open(id),
   editorWriteState: () => dvbEditor.writeState(), openScan: () => dvbScan.open(),
   scanWriteState: () => dvbScan.writeState(),
   onPageLoad: () => {fullDVBReloads++;},
 });
-const dvbCardsController = createDVBCardsController({requestJSON: api, confirmAction});
+const dvbCardsController = createDVBCardsController({requestJSON: api, confirmAction, canManage});
 const apiManagementController = createAPIManagementController({requestJSON: api, confirmAction});
+const usersController = createUsersController({root:document.querySelector('[data-panel="users"]'), request:api,
+  confirmAction, currentUser:authenticatedUser, onSessionRevoked:onUnauthorized});
 const eventFeed = createPageEventFeed({
   checkAuth: verifyEventSession,
   controllers: {
@@ -1426,9 +1439,11 @@ const epgHealthController = createEPGHealthController({els: {
 const pageNavigation = createPageNavigation({
   nav: els.navTabs,
   panels: els.panels,
+  canAccess: name => canAccessPage(authenticatedUser(),name),
   controllers: {
     "dvb-cards": dvbCardsController,
     api: apiManagementController,
+    users: usersController,
     "dvb-streams": {...dvbStreamsController, deactivate() { dvbEditor.deactivate(); dvbScan.deactivate(); dvbStreamsController.deactivate(); }},
     logs: {activate: loadLogs},
     softcams: {activate: loadSoftcams},
@@ -1469,6 +1484,7 @@ window.addEventListener("beforeunload", () => {
 function clearManagementView() {
   pageNavigation.stop();
   eventFeed.stop();
+  usersController.clear();
   state.streams = [];
   state.adapters = [];
   state.softcams = [];
@@ -1489,11 +1505,21 @@ function clearManagementView() {
   document.querySelectorAll('#dashboard .notice').forEach(notice => {notice.hidden = true; notice.textContent = '';});
   els.statusPill.textContent = 'Loading...';
   clearActionError();
+  const account = document.getElementById('currentUserLabel');
+  if (account) account.textContent = '';
   document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
 }
 
 void bootstrapAuth({
-  onAuthenticated() {
+  onAuthenticated(user) {
+    for (const button of els.navTabs.querySelectorAll('button[data-tab]')) {
+      button.hidden = !canAccessPage(user,button.dataset.tab);
+      button.disabled = button.hidden;
+    }
+    els.addStreamBtn.hidden = !canManage();
+    document.getElementById('currentUserLabel').textContent = `${user.username} / ${user.role[0].toUpperCase()}${user.role.slice(1)}`;
+    document.getElementById('accountUsername').textContent = user.username;
+    document.getElementById('accountRole').textContent = user.role[0].toUpperCase() + user.role.slice(1);
     pageNavigation.start();
     void bootstrap();
   },

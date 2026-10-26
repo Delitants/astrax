@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"slices"
 	"strings"
 	"time"
 )
@@ -18,11 +19,12 @@ const (
 	loginWindow        = 5 * time.Minute
 	sourceLoginLimit   = 5
 	globalLoginLimit   = 32
-	maxSessions        = 16
+	maxSessions        = 16 // Per user; at most maxUsers * maxSessions in total.
 )
 
 // Session carries the opaque browser credential and its derived CSRF value.
 type Session struct {
+	User          User `json:"user"`
 	Token         string
 	CSRFToken     string
 	IdleExpiresAt time.Time
@@ -30,6 +32,7 @@ type Session struct {
 }
 
 type sessionRecord struct {
+	username      string
 	sequence      uint64
 	issuedAt      time.Time
 	idleExpiresAt time.Time
@@ -86,40 +89,63 @@ func (m *Manager) AllowSetupAttempt(source string) bool {
 	return m.stateCurrentLocked() && m.state.Phase == "pending" && allowAttempt(source, m.now(), &m.setupWindow, &m.setupAttempts, m.setupSources)
 }
 
-// Login authenticates the sole administrator and issues a bounded memory-only session.
+// Login retains the original Go API for the account enrolled as admin.
 func (m *Manager) Login(source, password string) (Session, error) {
+	return m.LoginUser(source, "admin", password)
+}
+
+// LoginUser authenticates a named enabled user under shared attempt limits.
+func (m *Manager) LoginUser(source, username, password string) (Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !m.stateCurrentLocked() || m.state.Phase != "enrolled" || !m.allowLogin(source, m.now()) {
 		return Session{}, errCredentials
 	}
-	if !verifySecret(password, m.state.PasswordSalt, m.state.PasswordHash) {
+	if len(username) > 128 || len(password) > 1024 {
+		return Session{}, errCredentials
+	}
+	username, valid := normalizeUsername(username)
+	if !valid {
+		return Session{}, errCredentials
+	}
+	index := m.state.userIndex(username)
+	// Unknown and disabled identities still pay for one real Argon2id verifier.
+	verifier := m.state.Users[0]
+	if index >= 0 && m.state.Users[index].Enabled {
+		verifier = m.state.Users[index]
+	}
+	verified := verifySecret(password, verifier.PasswordSalt, verifier.PasswordHash)
+	if index < 0 || !m.state.Users[index].Enabled || !verified {
 		return Session{}, errCredentials
 	}
 	token, err := randomToken()
 	if err != nil {
-		return Session{}, err
+		return Session{}, errCredentials
 	}
 	now := m.now().UTC()
+	var oldestKey [32]byte
+	var oldest uint64
+	userSessions := 0
 	for key, record := range m.sessions {
 		if !now.Before(record.idleExpiresAt) || !now.Before(record.expiresAt) {
 			delete(m.sessions, key)
+			continue
+		}
+		if record.username != username {
+			continue
+		}
+		userSessions++
+		if userSessions == 1 || record.sequence < oldest {
+			oldestKey, oldest = key, record.sequence
 		}
 	}
-	if len(m.sessions) >= maxSessions {
-		var oldestKey [32]byte
-		var oldest uint64
-		for key, record := range m.sessions {
-			if oldest == 0 || record.sequence < oldest {
-				oldestKey, oldest = key, record.sequence
-			}
-		}
+	if userSessions >= maxSessions {
 		delete(m.sessions, oldestKey)
 	}
 	m.nextSessionSeq++
-	record := sessionRecord{sequence: m.nextSessionSeq, issuedAt: now, idleExpiresAt: now.Add(sessionIdleTTL), expiresAt: now.Add(sessionAbsoluteTTL)}
+	record := sessionRecord{username: username, sequence: m.nextSessionSeq, issuedAt: now, idleExpiresAt: now.Add(sessionIdleTTL), expiresAt: now.Add(sessionAbsoluteTTL)}
 	m.sessions[tokenDigest(token)] = record
-	return Session{Token: token, CSRFToken: m.csrfToken(token), IdleExpiresAt: record.idleExpiresAt, ExpiresAt: record.expiresAt}, nil
+	return Session{User: m.state.Users[index].User, Token: token, CSRFToken: m.csrfToken(token), IdleExpiresAt: record.idleExpiresAt, ExpiresAt: record.expiresAt}, nil
 }
 
 func (m *Manager) sessionRecordLocked(token string, now time.Time) ([32]byte, sessionRecord, bool) {
@@ -132,6 +158,11 @@ func (m *Manager) sessionRecordLocked(token string, now time.Time) ([32]byte, se
 		return [32]byte{}, sessionRecord{}, false
 	}
 	if !now.Before(record.idleExpiresAt) || !now.Before(record.expiresAt) {
+		delete(m.sessions, key)
+		return [32]byte{}, sessionRecord{}, false
+	}
+	index := m.state.userIndex(record.username)
+	if index < 0 || !m.state.Users[index].Enabled {
 		delete(m.sessions, key)
 		return [32]byte{}, sessionRecord{}, false
 	}
@@ -151,7 +182,7 @@ func (m *Manager) sessionLocked(token string, refresh bool) (Session, bool) {
 		}
 		m.sessions[key] = record
 	}
-	return Session{Token: token, CSRFToken: m.csrfToken(token), IdleExpiresAt: record.idleExpiresAt, ExpiresAt: record.expiresAt}, true
+	return Session{User: m.state.Users[m.state.userIndex(record.username)].User, Token: token, CSRFToken: m.csrfToken(token), IdleExpiresAt: record.idleExpiresAt, ExpiresAt: record.expiresAt}, true
 }
 
 func (m *Manager) verifySessionLocked(token string) (Session, bool) {
@@ -194,31 +225,30 @@ func (m *Manager) Logout(token string) {
 	delete(m.sessions, tokenDigest(token))
 }
 
-// ChangePassword persists the new verifier before revoking every session.
+// ChangePassword verifies the caller's old password, then revokes only their sessions.
 func (m *Manager) ChangePassword(token, oldPassword, newPassword string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.verifySessionLocked(token); !ok || !strongPassword(newPassword) {
+	session, ok := m.verifySessionLocked(token)
+	if !ok || !strongPassword(newPassword) {
 		return errCredentials
 	}
-	lock, err := lockState(m.configPath)
+	lock, err := m.lockCurrentStateLocked()
 	if err != nil {
 		return err
 	}
 	defer unlockState(lock)
-	current, err := loadCurrentState(m.configPath)
-	if err != nil || current != m.state || !verifySecret(oldPassword, current.PasswordSalt, current.PasswordHash) {
+	index := m.state.userIndex(session.User.Username)
+	if len(oldPassword) > 1024 || index < 0 || !verifySecret(oldPassword, m.state.Users[index].PasswordSalt, m.state.Users[index].PasswordHash) {
 		return errCredentials
 	}
 	salt, err := randomSalt()
 	if err != nil {
 		return err
 	}
-	next := authState{Version: stateVersion, Phase: "enrolled", PasswordSalt: encode(salt), PasswordHash: encode(hashSecret(newPassword, salt))}
-	if err := persistState(m.configPath, next); err != nil {
-		return err
-	}
-	m.state = next
-	clear(m.sessions)
-	return nil
+	next := m.state
+	next.Users = slices.Clone(m.state.Users)
+	next.Users[index].PasswordSalt = encode(salt)
+	next.Users[index].PasswordHash = encode(hashSecret(newPassword, salt))
+	return m.persistUsersLocked(next, session.User.Username)
 }

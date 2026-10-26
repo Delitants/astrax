@@ -10,7 +10,7 @@ Type=exec
 User=astrax
 Group=astrax
 WorkingDirectory=/var/lib/astrax
-ExecStart=/opt/astrax/astrax --config /var/lib/astrax/astrax-config.json
+ExecStart=/opt/astrax/astrax --config /var/lib/astrax/astrax-config.json --dvb-owner-helper /opt/astrax/dvb-owner-helper
 Restart=on-failure
 RestartSec=3
 

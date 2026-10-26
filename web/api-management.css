@@ -4,7 +4,7 @@
 .api-page { --api-space: 1.25rem; }
 .api-page .api-eyebrow { margin: 0 0 .35rem; color: var(--brand); font-size: .68rem; font-weight: 800; letter-spacing: .14em; }
 .api-page h3, .api-page h4 { margin: 0 0 .8rem; }
-.api-status-strip { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 1rem; padding: 1.15rem; border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 12px; background: linear-gradient(105deg, #edf6f4, #fffaf1); margin: 1.25rem 0; }
+.api-status-strip { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 1rem; padding: 1.15rem; border: 1px solid var(--line); border-radius: 12px; background: linear-gradient(105deg, #edf6f4, #fffaf1); margin: 1.25rem 0; }
 .api-status-strip > div { display: grid; align-content: start; gap: .4rem; min-width: 0; }
 .api-status-strip code { overflow-wrap: anywhere; }
 .api-label { color: var(--muted); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
@@ -31,7 +31,7 @@
 .api-page summary { cursor: pointer; font-weight: 700; font-size: .85rem; }
 .api-page pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; font-size: .76rem; line-height: 1.55; background: #f2f4f2; padding: .8rem; border-radius: 7px; }
 .api-try-form { border-top: 2px solid var(--line); padding-top: 1.1rem; margin-top: 1rem; }
-.api-warning { border-left: 3px solid var(--brand-2); padding: .65rem .8rem; background: #fff5e7; font-size: .8rem; line-height: 1.5; }
+.api-warning { border: 1px solid var(--line); border-radius: 8px; padding: .65rem .8rem; background: #fff5e7; font-size: .8rem; line-height: 1.5; }
 .api-dialog { width: min(550px,calc(100vw - 2rem)); }
 .api-dialog > form { min-width: 0; }
 .api-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

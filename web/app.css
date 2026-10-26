@@ -17,7 +17,7 @@
 [hidden] { display: none !important; }
 
 .auth-shell {
-  max-width: 620px;
+  max-width: 440px;
   min-height: calc(100vh - 2.5rem);
   margin: 0 auto;
   display: flex;
@@ -25,27 +25,34 @@
   justify-content: center;
   gap: 1.25rem;
 }
-.auth-brand { display: flex; align-items: center; gap: .7rem; color: var(--brand); font-weight: 800; letter-spacing: .04em; }
+.auth-brand { display: flex; align-items: center; justify-content: center; gap: .7rem; color: var(--brand); font-size: .95rem; font-weight: 800; }
 .auth-mark { display: inline-grid; place-items: center; width: 2.3rem; height: 2.3rem; border-radius: .6rem; background: var(--brand); color: white; font-size: .8rem; }
-.auth-card { border: 1px solid var(--line); border-top: 5px solid var(--brand); border-radius: 16px; padding: clamp(1.3rem, 4vw, 2.5rem); background: var(--bg-card); box-shadow: var(--shadow); }
-.auth-eyebrow { margin: 0 0 .4rem; color: var(--brand-2); text-transform: uppercase; letter-spacing: .15em; font-size: .72rem; font-weight: 800; }
-.auth-card h1 { font-size: clamp(1.8rem, 6vw, 2.7rem); line-height: 1.08; }
-.auth-lede { max-width: 50ch; color: var(--muted); line-height: 1.5; }
-.auth-address { padding: .8rem 1rem; border: 1px solid var(--line); border-radius: .6rem; background: rgba(0,95,115,.05); color: var(--muted); overflow-wrap: anywhere; }
-.auth-address strong { display: block; margin-top: .2rem; color: var(--ink); }
-.auth-form { display: grid; gap: 1rem; max-width: 29rem; }
-.auth-form h2 { margin: .5rem 0 0; }
+.auth-card { border: 1px solid var(--line); border-radius: 16px; padding: 2rem; background: var(--bg-card); box-shadow: 0 4px 20px rgba(6, 31, 38, .08); }
+.auth-card h1 { font-size: 1.75rem; line-height: 1.2; letter-spacing: -.025em; }
+.auth-lede { margin: .65rem 0 1.5rem; color: var(--muted); font-size: .95rem; line-height: 1.5; }
+.auth-form { display: grid; gap: 1rem; max-width: none; }
 .auth-form p { margin: 0; color: var(--muted); line-height: 1.5; }
 .auth-form label { display: grid; gap: .35rem; font-weight: 650; }
-.auth-form input { width: 100%; min-width: 0; }
-.auth-form button[type="submit"] { justify-self: start; min-width: 10rem; }
-.auth-foot { margin: 0; color: var(--muted); font-size: .8rem; }
+.auth-form input { width: 100%; min-width: 0; min-height: 44px; font-size: 1rem; }
+.auth-form button[type="submit"] { width: 100%; min-height: 44px; font: inherit; font-weight: 700; }
+.auth-password-field { display: grid; gap: .35rem; }
+.auth-password-wrap { position: relative; }
+.auth-password-wrap input { padding-right: 4.5rem; }
+.auth-password-toggle { position: absolute; inset: 0 2px 0 auto; min-width: 58px; min-height: 44px; padding: .4rem; border: 0; border-radius: 8px; color: var(--brand); background: transparent; font: inherit; font-size: .8rem; }
+.auth-password-toggle:hover { background: rgba(0, 95, 115, .05); }
+.auth-foot { margin: 0; color: var(--muted); font-size: .8rem; text-align: center; overflow-wrap: anywhere; }
+.auth-foot strong { font-weight: 600; }
+.auth-setup-help { border: 1px solid var(--line); border-radius: 8px; padding: .75rem; color: var(--muted); font-size: .85rem; line-height: 1.5; }
+.auth-setup-help summary { color: var(--brand); cursor: pointer; font-weight: 650; }
+.auth-setup-help p { margin-top: .65rem; overflow-wrap: anywhere; }
+.auth-status { color: var(--muted); font-size: .95rem; line-height: 1.5; }
 .password-form { margin-top: 1.5rem; }
 .topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; flex-wrap: wrap; }
 .management-address { color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
 @media (max-width: 680px) {
   .auth-shell { min-height: calc(100dvh - 2.5rem); justify-content: flex-start; padding-top: 2rem; }
-  .auth-card { width: 100%; }
+  .auth-card { width: 100%; padding: 1.5rem; }
+  .auth-card h1 { font-size: 1.625rem; }
   .topbar-actions { justify-content: flex-start; }
   .management-address { width: 100%; }
 }
@@ -223,7 +230,7 @@ h1 {
   padding: 0.75rem 1rem;
   background: rgba(0, 95, 115, 0.05);
   border-radius: 8px;
-  border-left: 3px solid var(--brand);
+  border: 1px solid var(--line);
 }
 
 .collapsible-section {
@@ -1333,7 +1340,7 @@ dialog form {
 .epg-health-table th { white-space: nowrap; }
 .epg-health-table :is(th, td):first-child { min-width: 5rem; white-space: nowrap; }
 .epg-health-table td { font-size: 0.85rem; }
-.epg-health-output { padding: 0.85rem; border: 1px solid var(--line); border-left: 3px solid var(--brand-2); border-radius: 8px; overflow-wrap: anywhere; }
+.epg-health-output { padding: 0.85rem; border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; }
 @media (max-width: 920px) { .epg-health-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 420px) { .epg-health-cards { grid-template-columns: minmax(0, 1fr); } }
 .menu-toggle { display: none; }

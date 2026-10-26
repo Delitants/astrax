@@ -127,7 +127,7 @@ func (s *Server) handleDVBStreams(w http.ResponseWriter, r *http.Request) {
 				respondDVBError(w, err)
 				return
 			}
-			if _, external := externalPrincipal(r); external {
+			if _, external := externalPrincipal(r); external || restrictedManagement(r) {
 				writeJSON(w, 200, s.store.ListPublicDVBStreams(query))
 			} else {
 				writeJSON(w, 200, s.store.ListDVBStreams(query))

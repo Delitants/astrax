@@ -50,6 +50,7 @@ func (h *managementHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet && s.publicAsset(r.URL.Path) {
+		w.Header().Set("Cache-Control", "no-cache")
 		if r.URL.Path == "/login" || r.URL.Path == "/setup" || r.URL.Path == "/index.html" {
 			clone := r.Clone(r.Context())
 			clone.URL.Path = "/"
@@ -64,6 +65,12 @@ func (h *managementHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		authResponse(w, http.StatusUnauthorized, apiError{Error: "authentication required"})
 		return
 	}
+	if !managementRoleAllows(string(session.User.Role), r.Method, r.URL.Path) {
+		authResponse(w, http.StatusForbidden, apiError{Error: "your role does not permit this operation"})
+		return
+	}
+	r = r.WithContext(context.WithValue(r.Context(), monitoringManagementKey{}, session.User.Role != adminauth.RoleAdministrator))
+	w.Header().Set("Cache-Control", "no-store")
 	if mutatingMethod(r.Method) {
 		if !s.sameManagementOrigin(r) || !validManagementCSRF(r, session.CSRFToken) {
 			authResponse(w, http.StatusForbidden, apiError{Error: "request not permitted"})
@@ -98,8 +105,16 @@ func (h *managementHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		r.Body = io.NopCloser(bytes.NewReader(payload))
 		r.ContentLength = int64(len(payload))
+		if session.User.Role == adminauth.RoleOperator && (r.URL.RawQuery != "" || r.URL.Path == "/api/v1/dvb-streams/bulk" && !operatorBulkControl(payload)) {
+			authResponse(w, http.StatusForbidden, apiError{Error: "operators may only start, stop or restart existing streams"})
+			return
+		}
 	}
-	s.mux.ServeHTTP(w, r)
+	if restrictedManagement(r) && r.URL.Path != "/api/v1/events" {
+		s.mux.ServeHTTP(externalResponseWriter{w}, r)
+	} else {
+		s.mux.ServeHTTP(w, r)
+	}
 }
 
 func (s *Server) publicAsset(path string) bool {
@@ -236,7 +251,7 @@ func (s *Server) serveAuth(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if path == "/api/v1/auth/session" && r.Method == http.MethodGet {
 		if session, ok := s.requestSession(r); ok {
-			authResponse(w, http.StatusOK, map[string]any{"authenticated": true, "csrf_token": session.CSRFToken})
+			authResponse(w, http.StatusOK, map[string]any{"authenticated": true, "csrf_token": session.CSRFToken, "user": session.User})
 		} else {
 			authResponse(w, http.StatusUnauthorized, map[string]any{"authenticated": false, "setup_pending": s.auth.SetupPending()})
 		}
@@ -309,11 +324,8 @@ func (s *Server) serveAuth(w http.ResponseWriter, r *http.Request) {
 		}
 		s.issueSession(w, r, issued)
 	case "/api/v1/auth/login":
-		issued, err := s.auth.Login(remoteSource(r), in.Password)
-		if err != nil || (in.Username != "" && in.Username != "admin") {
-			if err == nil {
-				s.auth.Logout(issued.Token)
-			}
+		issued, err := s.auth.LoginUser(remoteSource(r), in.Username, in.Password)
+		if err != nil {
 			authResponse(w, http.StatusUnauthorized, apiError{Error: "invalid credentials"})
 			return
 		}
@@ -324,7 +336,7 @@ func (s *Server) serveAuth(w http.ResponseWriter, r *http.Request) {
 		authResponse(w, http.StatusOK, map[string]bool{"authenticated": false})
 	case "/api/v1/auth/password":
 		if err := s.auth.ChangePassword(session.Token, in.OldPassword, in.NewPassword); err != nil {
-			authResponse(w, http.StatusUnauthorized, apiError{Error: "invalid credentials"})
+			authResponse(w, http.StatusBadRequest, apiError{Error: "password not changed; check your current password and use a strong new password of at least 12 characters"})
 			return
 		}
 		clearManagementCookie(w, r)
@@ -358,7 +370,7 @@ func remoteSource(r *http.Request) string {
 
 func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, session adminauth.Session) {
 	http.SetCookie(w, &http.Cookie{Name: managementCookieName, Value: session.Token, Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode})
-	authResponse(w, http.StatusOK, map[string]any{"authenticated": true, "csrf_token": session.CSRFToken})
+	authResponse(w, http.StatusOK, map[string]any{"authenticated": true, "csrf_token": session.CSRFToken, "user": session.User})
 }
 
 func clearManagementCookie(w http.ResponseWriter, r *http.Request) {
