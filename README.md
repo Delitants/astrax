@@ -5,9 +5,9 @@ DVB cards, streams and network outputs.
 
 ## Install
 
-The v0.1.1-rc1 installer targets Ubuntu 24.04 amd64 with systemd. Download the
-installer, matching source/notices archive and checksums from
-[GitHub Releases](https://github.com/Delitants/astrax/releases).
+The v0.1.1 `.run` installer supports **Ubuntu 24.04 amd64 with systemd**.
+Download the installer, matching source/notices archive and checksums from
+[AstraX v0.1.1](https://github.com/Delitants/astrax/releases/tag/v0.1.1).
 
 Clean installations only: existing AstraX files or services are refused, not
 migrated or overwritten. Installation does not start the service; activation
@@ -23,11 +23,10 @@ levels. See [Management accounts](docs/accounts.md).
 
 ## Known limits
 
-This release candidate retains the validated runtime and installer logic;
-the repackaged file has not been installed on Linux. Actual service startup/
-boot, privileged DVB ownership-helper execution, and live DVB/softcam/media
-validation remain unverified or deferred. OpenRC and SysV are not qualified
-targets for this release.
+The exact installer passed isolated Linux installation, rollback and permissions
+checks. Installed-host service start/boot, privileged ownership-helper execution,
+and live DVB/softcam/media validation remain unverified or deferred. OpenRC,
+SysV and other platforms are not supported by this installer.
 
 ## Source and license
 
